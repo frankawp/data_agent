@@ -1,6 +1,6 @@
 """工具模块"""
 
-from .sql_tools import execute_sql, query_with_duckdb, query_parquet
+from .sql_tools import execute_sql, query_with_duckdb, query_parquet, list_tables, describe_table
 from .python_tools import execute_python_safe
 from .data_tools import analyze_dataframe, statistical_analysis, analyze_large_dataset
 from .ml_tools import train_model, predict, evaluate_model
@@ -11,6 +11,8 @@ __all__ = [
     "execute_sql",
     "query_with_duckdb",
     "query_parquet",
+    "list_tables",
+    "describe_table",
     # Python工具
     "execute_python_safe",
     # 数据分析工具

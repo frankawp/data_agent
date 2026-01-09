@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "data-agent"
-version = "0.1.0"
-description = "基于LangGraph和DeepAgents框架的智能数据分析Agent"
+version = "0.2.0"
+description = "基于DeepAgents框架的智能数据分析Agent"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
     { name = "Data Agent Team" }
 ]
-keywords = ["agent", "data-analysis", "langgraph", "llm"]
+keywords = ["agent", "data-analysis", "deepagents", "llm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -25,6 +25,7 @@ classifiers = [
 
 dependencies = [
     # 核心框架
+    "deepagents>=0.1.0",
     "langchain>=0.3.0",
     "langchain-openai>=0.2.0",
     "langgraph>=0.2.0",
