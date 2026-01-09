@@ -198,13 +198,31 @@ class DataAgent:
 
         final_response = ""
         tool_calls_pending = {}  # 记录待处理的工具调用
+        collected_messages = list(self._messages)  # 收集流式处理中的消息
 
         # 流式调用 Agent
         for event in self.agent.stream({"messages": self._messages}):
             for node_name, node_output in event.items():
+                # 跳过中间件事件（None 值或非 dict）
+                if node_output is None:
+                    continue
+                if not isinstance(node_output, dict):
+                    continue
+
+                # 获取消息列表
                 messages = node_output.get("messages", [])
 
+                # 处理 Overwrite 对象（LangGraph 状态更新机制）
+                if hasattr(messages, "value"):
+                    messages = messages.value
+
+                if not isinstance(messages, list):
+                    continue
+
                 for msg in messages:
+                    # 收集消息用于更新历史
+                    collected_messages.append(msg)
+
                     if isinstance(msg, AIMessage):
                         # AI 消息 - 可能包含思考或工具调用
                         if msg.tool_calls:
@@ -217,8 +235,9 @@ class DataAgent:
 
                                 if on_tool_call:
                                     on_tool_call(tool_name, tool_args)
-                        elif msg.content:
-                            # 纯文本内容（思考或最终回复）
+
+                        # 记录文本内容（可能是思考或最终回复）
+                        if msg.content:
                             if on_thinking:
                                 on_thinking(msg.content)
                             final_response = msg.content
@@ -232,9 +251,8 @@ class DataAgent:
                         if on_tool_result:
                             on_tool_result(tool_name, result_content)
 
-        # 获取最终消息历史
-        final_state = self.agent.invoke({"messages": self._messages})
-        self._messages = final_state.get("messages", self._messages)
+        # 更新消息历史
+        self._messages = collected_messages
 
         return final_response
 
