@@ -6,21 +6,30 @@ CLI主入口
 
 import sys
 import logging
+import json
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
 from rich.prompt import Prompt
 from rich.table import Table
+from rich.live import Live
+from rich.text import Text
+from rich.spinner import Spinner
+from rich.padding import Padding
 
 from .agent.deep_agent import DataAgent
 from .config.settings import get_settings
 
-# 配置日志
+# 配置日志 - 默认只显示警告级别，减少噪音
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+# 禁用 httpx 的详细日志
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 
@@ -99,6 +108,27 @@ def validate_config(console: Console) -> bool:
     return True
 
 
+def truncate_text(text: str, max_length: int = 200) -> str:
+    """截断过长的文本"""
+    if len(text) <= max_length:
+        return text
+    return text[:max_length] + "..."
+
+
+def format_tool_args(args: dict) -> str:
+    """格式化工具参数"""
+    if not args:
+        return ""
+
+    parts = []
+    for key, value in args.items():
+        if isinstance(value, str) and len(value) > 100:
+            value = value[:100] + "..."
+        parts.append(f"{key}={repr(value)}")
+
+    return ", ".join(parts)
+
+
 def main():
     """主函数"""
     console = Console()
@@ -147,22 +177,58 @@ def main():
                 console.print("[green]对话历史已清除。[/green]")
                 continue
 
-            # 处理用户输入
-            with console.status("[bold green]思考中...[/bold green]", spinner="dots"):
-                try:
-                    response = agent.chat(user_input)
-                except Exception as e:
-                    logger.error(f"处理失败: {e}")
-                    console.print(f"[red]处理失败: {e}[/red]")
-                    continue
+            # 处理用户输入 - 显示思考过程
+            console.print()  # 空行
+            step_count = [0]  # 使用列表以便在闭包中修改
 
-            # 显示响应
+            def on_thinking(content: str):
+                """显示思考内容"""
+                # 最终回复会在后面单独显示，这里显示中间思考
+                pass
+
+            def on_tool_call(tool_name: str, tool_args: dict):
+                """显示工具调用"""
+                step_count[0] += 1
+                args_str = format_tool_args(tool_args)
+                console.print(
+                    f"  [dim cyan][{step_count[0]}][/dim cyan] "
+                    f"[bold yellow]调用工具:[/bold yellow] [green]{tool_name}[/green]"
+                )
+                if args_str:
+                    console.print(f"      [dim]参数: {truncate_text(args_str, 150)}[/dim]")
+
+            def on_tool_result(tool_name: str, result: str):
+                """显示工具结果"""
+                # 截断过长的结果
+                result_preview = truncate_text(result.strip(), 300)
+                # 显示结果预览
+                console.print(f"      [dim green]结果: {result_preview}[/dim green]")
+                console.print()  # 空行分隔
+
+            try:
+                console.print("[bold blue]思考中...[/bold blue]")
+                console.print()
+
+                response = agent.chat_stream(
+                    user_input,
+                    on_thinking=on_thinking,
+                    on_tool_call=on_tool_call,
+                    on_tool_result=on_tool_result,
+                )
+
+            except Exception as e:
+                logger.error(f"处理失败: {e}")
+                console.print(f"[red]处理失败: {e}[/red]")
+                continue
+
+            # 显示最终响应
             if response:
                 console.print(Panel(
                     Markdown(response),
-                    title="Agent",
+                    title="Agent 回复",
                     border_style="green"
                 ))
+            console.print()  # 空行
 
         except KeyboardInterrupt:
             console.print("\n[yellow]已中断。输入 'exit' 退出。[/yellow]")

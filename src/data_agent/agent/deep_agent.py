@@ -4,10 +4,11 @@ DeepAgent 数据分析实现
 基于 DeepAgents 框架构建的数据分析 Agent。
 """
 
-from typing import Optional
+from typing import Optional, Generator, Callable, Any
 
 from deepagents import create_deep_agent
 from langchain.chat_models import init_chat_model
+from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
 
 from ..config.settings import get_settings
@@ -172,6 +173,70 @@ class DataAgent:
             response = "抱歉，无法处理您的请求。"
 
         return response
+
+    def chat_stream(
+        self,
+        user_input: str,
+        on_thinking: Optional[Callable[[str], None]] = None,
+        on_tool_call: Optional[Callable[[str, dict], None]] = None,
+        on_tool_result: Optional[Callable[[str, str], None]] = None,
+    ) -> str:
+        """
+        流式与 Agent 对话，显示思考过程
+
+        Args:
+            user_input: 用户输入
+            on_thinking: 思考内容回调函数 (content)
+            on_tool_call: 工具调用回调函数 (tool_name, tool_args)
+            on_tool_result: 工具结果回调函数 (tool_name, result)
+
+        Returns:
+            str: Agent 最终响应
+        """
+        # 构建消息
+        self._messages.append({"role": "user", "content": user_input})
+
+        final_response = ""
+        tool_calls_pending = {}  # 记录待处理的工具调用
+
+        # 流式调用 Agent
+        for event in self.agent.stream({"messages": self._messages}):
+            for node_name, node_output in event.items():
+                messages = node_output.get("messages", [])
+
+                for msg in messages:
+                    if isinstance(msg, AIMessage):
+                        # AI 消息 - 可能包含思考或工具调用
+                        if msg.tool_calls:
+                            # 有工具调用
+                            for tool_call in msg.tool_calls:
+                                tool_name = tool_call.get("name", "unknown")
+                                tool_args = tool_call.get("args", {})
+                                tool_id = tool_call.get("id", "")
+                                tool_calls_pending[tool_id] = tool_name
+
+                                if on_tool_call:
+                                    on_tool_call(tool_name, tool_args)
+                        elif msg.content:
+                            # 纯文本内容（思考或最终回复）
+                            if on_thinking:
+                                on_thinking(msg.content)
+                            final_response = msg.content
+
+                    elif isinstance(msg, ToolMessage):
+                        # 工具返回结果
+                        tool_id = getattr(msg, "tool_call_id", "")
+                        tool_name = tool_calls_pending.get(tool_id, "unknown")
+                        result_content = msg.content if isinstance(msg.content, str) else str(msg.content)
+
+                        if on_tool_result:
+                            on_tool_result(tool_name, result_content)
+
+        # 获取最终消息历史
+        final_state = self.agent.invoke({"messages": self._messages})
+        self._messages = final_state.get("messages", self._messages)
+
+        return final_response
 
     def clear_history(self):
         """清除对话历史"""
