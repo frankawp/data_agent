@@ -1,38 +1,34 @@
-# 已安装的核心依赖
-langchain==1.2.2
-langchain-core==1.2.6
-langchain-anthropic==1.3.1
-deepagents==0.3.1
-langgraph
-anthropic==0.75.0
-zhipuai>=2.1.0
+# 核心框架
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langgraph>=0.2.0
 
-# 数据库相关
+# CLI
+rich>=13.0.0
+
+# 数据库
 sqlalchemy>=2.0.0
 pymysql>=1.1.0
-psycopg2-binary>=2.9.0
+duckdb>=1.0.0
 
-# 数据分析和科学计算
+# 数据分析
 pandas>=2.0.0
 numpy>=1.24.0
-scipy>=1.11.0
+scipy>=1.10.0
 
 # 机器学习
 scikit-learn>=1.3.0
 
 # 图分析
-networkx>=3.1.0
+networkx>=3.0
 
-# 数据验证
+# 沙箱（需要先安装MicroSandbox服务）
+microsandbox>=0.1.0
+
+# 工具
+python-dotenv>=1.0.0
 pydantic>=2.0.0
 
-# CLI界面
-rich>=13.0.0
-prompt-toolkit>=3.0.0
-
-# 异步支持
-aiohttp>=3.8.0
-
-# 可视化
-matplotlib>=3.7.0
-seaborn>=0.12.0
+# 开发依赖
+pytest>=7.0.0
+pytest-asyncio>=0.21.0

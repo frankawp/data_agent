@@ -1,182 +1,201 @@
-"""智谱AI的LangChain兼容包装器"""
+"""
+智谱AI LLM封装
 
-from typing import Any, List, Optional, Sequence
-from pydantic import Field, PrivateAttr
-from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage
+使用langchain-openai兼容接口连接智谱AI。
+"""
+
+from typing import Optional, List, Any
+
+from langchain_openai import ChatOpenAI
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.outputs import ChatResult, ChatGeneration
-from langchain_core.callbacks.manager import CallbackManagerForLLMRun
+from langchain_core.callbacks import CallbackManagerForLLMRun
+from langchain_core.messages import BaseMessage
+
+from ..config.settings import get_settings
 
 
-class ChatZhipuAI(BaseChatModel):
-    """智谱AI的LangChain兼容包装器
+def create_zhipu_llm(
+    model: Optional[str] = None,
+    temperature: float = 0.7,
+    max_tokens: Optional[int] = None,
+    streaming: bool = False,
+    **kwargs
+) -> ChatOpenAI:
+    """
+    创建智谱AI LLM实例
 
-    支持智谱AI的GLM-4系列模型
+    Args:
+        model: 模型名称，默认使用配置中的模型
+        temperature: 温度参数，控制输出随机性
+        max_tokens: 最大输出token数
+        streaming: 是否启用流式输出
+        **kwargs: 其他ChatOpenAI参数
+
+    Returns:
+        ChatOpenAI实例
+    """
+    settings = get_settings()
+
+    return ChatOpenAI(
+        model=model or settings.zhipu_model,
+        openai_api_key=settings.zhipu_api_key,
+        openai_api_base=settings.zhipu_base_url,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        streaming=streaming,
+        **kwargs
+    )
+
+
+def create_zhipu_llm_with_tools(
+    tools: List[Any],
+    model: Optional[str] = None,
+    temperature: float = 0.7,
+    **kwargs
+) -> ChatOpenAI:
+    """
+    创建带有工具绑定的智谱AI LLM实例
+
+    Args:
+        tools: 工具列表
+        model: 模型名称
+        temperature: 温度参数
+        **kwargs: 其他参数
+
+    Returns:
+        带有工具绑定的ChatOpenAI实例
+    """
+    llm = create_zhipu_llm(model=model, temperature=temperature, **kwargs)
+    return llm.bind_tools(tools)
+
+
+class ZhipuChatModel:
+    """
+    智谱AI聊天模型封装类
+
+    提供更高级的功能封装，如对话历史管理、错误重试等。
     """
 
-    api_key: str = Field(...)
-    model: str = Field(default="glm-4")
-    base_url: str = Field(default="https://open.bigmodel.cn/api/paas/v4")
-    temperature: float = Field(default=0.7)
-
-    # 使用PrivateAttr来存储不需要验证的属性
-    _client: Any = PrivateAttr(default=None)
-
-    class Config:
-        """Pydantic配置"""
-        arbitrary_types_allowed = True
-
-    def __init__(self, api_key: str, model: str = "glm-4", base_url: str = None, **kwargs):
-        """初始化智谱AI
+    def __init__(
+        self,
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_retries: int = 3,
+    ):
+        """
+        初始化智谱AI聊天模型
 
         Args:
-            api_key: API密钥
-            model: 模型名称（如 glm-4, glm-4-plus等）
-            base_url: API基础URL
-            **kwargs: 其他参数
+            model: 模型名称
+            temperature: 温度参数
+            max_retries: 最大重试次数
         """
-        super().__init__(
-            api_key=api_key,
-            model=model,
-            base_url=base_url or "https://open.bigmodel.cn/api/paas/v4",
-            **kwargs
-        )
-
-        # 导入zhipuai SDK
-        try:
-            from zhipuai import ZhipuAI
-            self._client = ZhipuAI(api_key=api_key, base_url=self.base_url)
-        except ImportError:
-            raise ImportError("请安装zhipuai包: pip install zhipuai")
+        self.llm = create_zhipu_llm(model=model, temperature=temperature)
+        self.max_retries = max_retries
+        self._conversation_history: List[BaseMessage] = []
 
     @property
-    def client(self):
-        """获取client属性"""
-        return self._client
+    def model_name(self) -> str:
+        """获取模型名称"""
+        return self.llm.model_name
 
-    @property
-    def _llm_type(self) -> str:
-        return "zhipu_ai"
-
-    def _format_messages(self, messages: Sequence[BaseMessage]) -> List[dict]:
-        """将LangChain消息格式转换为智谱AI格式
-
-        Args:
-            messages: LangChain消息列表
-
-        Returns:
-            智谱AI消息列表
+    def invoke(self, messages: List[BaseMessage], **kwargs) -> BaseMessage:
         """
-        formatted = []
-
-        for message in messages:
-            if isinstance(message, HumanMessage):
-                formatted.append({
-                    "role": "user",
-                    "content": message.content
-                })
-            elif isinstance(message, AIMessage):
-                formatted.append({
-                    "role": "assistant",
-                    "content": message.content
-                })
-            elif isinstance(message, SystemMessage):
-                formatted.append({
-                    "role": "system",
-                    "content": message.content
-                })
-
-        return formatted
-
-    def _generate(
-        self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
-        **kwargs: Any,
-    ) -> ChatResult:
-        """生成文本（同步版本）
-
-        Args:
-            messages: 消息列表
-            stop: 停止序列
-            run_manager: 回调管理器
-            **kwargs: 其他参数
-
-        Returns:
-            ChatResult
-        """
-        # 格式化消息
-        formatted_messages = self._format_messages(messages)
-
-        # 调用智谱AI API
-        try:
-            response = self._client.chat.completions.create(
-                model=self.model,
-                messages=formatted_messages,
-                temperature=self.temperature,
-                **kwargs
-            )
-
-            # 提取响应内容
-            content = response.choices[0].message.content
-
-            # 创建ChatGeneration
-            generation = ChatGeneration(message=AIMessage(content=content))
-
-            return ChatResult(generations=[generation])
-
-        except Exception as e:
-            # 返回错误消息
-            error_generation = ChatGeneration(
-                message=AIMessage(content=f"智谱AI调用失败: {str(e)}")
-            )
-            return ChatResult(generations=[error_generation])
-
-    async def ainvoke(
-        self,
-        messages: Sequence[BaseMessage],
-        **kwargs: Any
-    ) -> AIMessage:
-        """异步调用智谱AI
+        调用模型
 
         Args:
             messages: 消息列表
             **kwargs: 其他参数
 
         Returns:
-            AIMessage
+            模型响应消息
         """
-        # 格式化消息
-        formatted_messages = self._format_messages(messages)
+        return self.llm.invoke(messages, **kwargs)
 
-        # 调用智谱AI API
-        try:
-            response = self._client.chat.completions.create(
-                model=self.model,
-                messages=formatted_messages,
-                temperature=self.temperature,
-                **kwargs
-            )
-
-            # 提取响应内容
-            content = response.choices[0].message.content
-
-            return AIMessage(content=content)
-
-        except Exception as e:
-            # 返回错误消息
-            return AIMessage(content=f"智谱AI调用失败: {str(e)}")
-
-    def invoke(self, messages: Sequence[BaseMessage], **kwargs):
-        """同步调用
+    async def ainvoke(self, messages: List[BaseMessage], **kwargs) -> BaseMessage:
+        """
+        异步调用模型
 
         Args:
             messages: 消息列表
             **kwargs: 其他参数
 
         Returns:
-            AIMessage
+            模型响应消息
         """
-        result = self._generate(list(messages), **kwargs)
-        return result.generations[0].message
+        return await self.llm.ainvoke(messages, **kwargs)
+
+    def stream(self, messages: List[BaseMessage], **kwargs):
+        """
+        流式调用模型
+
+        Args:
+            messages: 消息列表
+            **kwargs: 其他参数
+
+        Yields:
+            模型响应片段
+        """
+        streaming_llm = create_zhipu_llm(streaming=True)
+        for chunk in streaming_llm.stream(messages, **kwargs):
+            yield chunk
+
+    async def astream(self, messages: List[BaseMessage], **kwargs):
+        """
+        异步流式调用模型
+
+        Args:
+            messages: 消息列表
+            **kwargs: 其他参数
+
+        Yields:
+            模型响应片段
+        """
+        streaming_llm = create_zhipu_llm(streaming=True)
+        async for chunk in streaming_llm.astream(messages, **kwargs):
+            yield chunk
+
+    def chat(self, user_message: str) -> str:
+        """
+        简单聊天接口，自动管理对话历史
+
+        Args:
+            user_message: 用户消息
+
+        Returns:
+            模型响应文本
+        """
+        from langchain_core.messages import HumanMessage, AIMessage
+
+        self._conversation_history.append(HumanMessage(content=user_message))
+        response = self.invoke(self._conversation_history)
+        self._conversation_history.append(response)
+
+        return response.content
+
+    def clear_history(self):
+        """清除对话历史"""
+        self._conversation_history = []
+
+    def bind_tools(self, tools: List[Any]) -> ChatOpenAI:
+        """
+        绑定工具
+
+        Args:
+            tools: 工具列表
+
+        Returns:
+            带有工具绑定的LLM
+        """
+        return self.llm.bind_tools(tools)
+
+
+# 便捷函数
+def get_llm() -> ChatOpenAI:
+    """获取默认LLM实例"""
+    return create_zhipu_llm()
+
+
+def get_streaming_llm() -> ChatOpenAI:
+    """获取流式输出LLM实例"""
+    return create_zhipu_llm(streaming=True)

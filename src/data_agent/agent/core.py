@@ -1,286 +1,370 @@
-"""核心Agent创建逻辑"""
+"""
+DeepAgent核心实现
 
-import os
-from typing import Optional, List
-from langchain_anthropic import ChatAnthropic
+基于LangGraph构建的数据分析Agent。
+"""
+
+import logging
+from typing import Dict, Any, Optional, Literal
+
+from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from ..tools.sql_tools import SQL_TOOLS
-from ..tools.python_tools import PYTHON_TOOLS
-from ..tools.data_tools import DATA_TOOLS
-from ..tools.ml_tools import ML_TOOLS
-from ..tools.graph_tools import GRAPH_TOOLS
+
+from ..state.graph_state import AgentState, AgentPhase, create_initial_state
+from ..dag.models import DAGPlan
 from ..dag.generator import DAGGenerator
 from ..dag.visualizer import DAGVisualizer
-from ..state.graph_state import DataAgentState
-from .zhipu_llm import ChatZhipuAI
+from .executor import DAGExecutor
+from .zhipu_llm import create_zhipu_llm
+from ..config.prompts import MAIN_AGENT_PROMPT, CONVERSATION_PROMPT
+from ..config.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class DataAgent:
-    """数据开发Agent
+    """
+    数据分析Agent
 
-    负责与用户交互、生成DAG计划、执行数据分析任务
+    支持多轮对话、自动生成DAG执行计划、执行数据分析任务。
     """
 
-    def __init__(
-        self,
-        api_key: str = None,
-        model_name: str = "claude-sonnet-4-5-20250929",
-        db_connection: str = None,
-        provider: str = "anthropic",
-        base_url: str = None
-    ):
-        """初始化Agent
+    def __init__(self):
+        """初始化Agent"""
+        self.settings = get_settings()
+        self.llm = create_zhipu_llm()
+        self.dag_generator = DAGGenerator()
+        self.dag_executor = DAGExecutor()
+        self.visualizer = DAGVisualizer()
+        self.graph = self._build_graph()
 
-        Args:
-            api_key: API密钥
-            model_name: 模型名称
-            db_connection: 数据库连接字符串
-            provider: LLM提供商（anthropic或zhipu）
-            base_url: API基础URL（仅用于zhipu）
-        """
-        self.provider = provider
+    def _build_graph(self) -> StateGraph:
+        """构建Agent状态图"""
+        graph = StateGraph(AgentState)
 
-        # 初始化LLM
-        if provider == "zhipu":
-            # 使用智谱AI
-            if not api_key:
-                raise ValueError("使用智谱AI时必须提供api_key参数")
+        # 添加节点
+        graph.add_node("conversation", self._conversation_node)
+        graph.add_node("planning", self._planning_node)
+        graph.add_node("confirmation", self._confirmation_node)
+        graph.add_node("execution", self._execution_node)
 
-            self.llm = ChatZhipuAI(
-                api_key=api_key,
-                model=model_name,
-                base_url=base_url or "https://open.bigmodel.cn/api/paas/v4"
-            )
-        else:
-            # 使用Anthropic（默认）
-            # 设置API密钥
-            if api_key:
-                os.environ["ANTHROPIC_API_KEY"] = api_key
-            elif not os.environ.get("ANTHROPIC_API_KEY"):
-                raise ValueError("请提供ANTHROPIC_API_KEY环境变量或api_key参数")
+        # 设置入口
+        graph.set_entry_point("conversation")
 
-            self.llm = ChatAnthropic(
-                model=model_name,
-                temperature=0.7
-            )
-
-        # 数据库连接
-        self.db_connection = db_connection
-
-        # 初始化DAG生成器
-        self.dag_generator = DAGGenerator(self.llm)
-
-        # 收集所有工具
-        self.all_tools = (
-            SQL_TOOLS +
-            PYTHON_TOOLS +
-            DATA_TOOLS +
-            ML_TOOLS +
-            GRAPH_TOOLS
+        # 添加条件边
+        graph.add_conditional_edges(
+            "conversation",
+            self._route_after_conversation,
+            {
+                "continue": "conversation",
+                "plan": "planning",
+                "end": END,
+            }
         )
 
-        # 系统提示词
-        self.system_prompt = self._build_system_prompt()
+        graph.add_edge("planning", "confirmation")
 
-    def _build_system_prompt(self) -> str:
-        """构建系统提示词"""
-        tools_desc = "\n".join([
-            f"- {tool.name}: {tool.description}"
-            for tool in self.all_tools
-        ])
+        graph.add_conditional_edges(
+            "confirmation",
+            self._route_after_confirmation,
+            {
+                "execute": "execution",
+                "modify": "planning",
+                "cancel": END,
+            }
+        )
 
-        return f"""你是一个专业的数据开发助手，擅长帮助用户进行数据分析和处理。
+        graph.add_edge("execution", END)
 
-## 你的能力
+        return graph.compile()
 
-### 可用工具
-{tools_desc}
+    def _conversation_node(self, state: AgentState) -> Dict[str, Any]:
+        """
+        对话节点
 
-### 工作流程
-1. **理解需求**: 与用户交流，明确他们的数据分析目标
-2. **生成计划**: 当需求明确后，生成一个DAG执行计划
-3. **确认计划**: 向用户展示DAG计划，等待确认
-4. **执行任务**: 按照DAG执行计划，调用相应的工具完成任务
+        与用户进行多轮对话，理解需求。
+        """
+        messages = state["messages"]
 
-## 交互原则
+        # 构建系统提示
+        system_msg = SystemMessage(content=f"{MAIN_AGENT_PROMPT}\n\n{CONVERSATION_PROMPT}")
 
-1. **多轮对话**: 不要急于生成DAG，先通过对话充分理解用户需求
-2. **明确目标**: 确保理解用户想要完成什么任务
-3. **数据源**: 了解数据来源（数据库、文件等）
-4. **分析类型**: 了解用户想做什么类型的分析（统计分析、机器学习、图分析等）
-5. **输出格式**: 了解用户期望的输出格式
+        # 调用LLM
+        response = self.llm.invoke([system_msg] + messages)
 
-## 何时生成DAG
+        return {
+            "messages": [response],
+            "iteration_count": state.get("iteration_count", 0) + 1,
+        }
 
-当你充分理解了以下信息后，可以生成DAG计划：
-- 用户的分析目标
-- 数据源信息（数据库、表、文件等）
-- 需要的分析类型
-- 预期的输出结果
+    def _planning_node(self, state: AgentState) -> Dict[str, Any]:
+        """
+        规划节点
 
-## 回复风格
+        根据对话内容生成DAG执行计划。
+        """
+        messages = state["messages"]
 
-- 使用中文交流
-- 简洁、专业、友好
-- 必要时询问澄清问题
-- 对技术概念进行适当解释
+        # 提取用户需求
+        user_messages = [m for m in messages if isinstance(m, HumanMessage)]
+        if user_messages:
+            user_request = user_messages[-1].content
+        else:
+            user_request = "未知需求"
+
+        # 获取上下文
+        context = state.get("context", {})
+        context_str = "\n".join(f"{k}: {v}" for k, v in context.items())
+
+        # 生成DAG
+        try:
+            dag_plan = self.dag_generator.generate(user_request, context_str)
+
+            # 生成可视化
+            mermaid = self.visualizer.to_mermaid(dag_plan)
+
+            # 构建响应
+            response_content = f"""我已经理解您的需求，为您生成了以下执行计划：
+
+**执行计划**: {dag_plan.name}
+
+```mermaid
+{mermaid}
+```
+
+**任务列表**:
 """
+            for i, node in enumerate(dag_plan.nodes, 1):
+                deps = f"(依赖: {', '.join(node.dependencies)})" if node.dependencies else ""
+                response_content += f"{i}. **{node.name}** - 使用 `{node.tool}` {deps}\n"
 
-    async def chat(
+            response_content += "\n是否执行此计划？请回复「执行」或「修改」。"
+
+            return {
+                "messages": [AIMessage(content=response_content)],
+                "dag_plan": dag_plan.to_dict(),
+                "current_phase": AgentPhase.CONFIRMATION,
+            }
+
+        except Exception as e:
+            logger.error(f"DAG生成失败: {e}")
+            return {
+                "messages": [AIMessage(content=f"抱歉，生成执行计划时出错: {str(e)}")],
+                "error": str(e),
+            }
+
+    def _confirmation_node(self, state: AgentState) -> Dict[str, Any]:
+        """
+        确认节点
+
+        等待用户确认执行计划。
+        """
+        # 这个节点主要是等待用户输入
+        # 实际的确认逻辑在路由函数中处理
+        return {}
+
+    def _execution_node(self, state: AgentState) -> Dict[str, Any]:
+        """
+        执行节点
+
+        执行DAG计划中的所有任务。
+        """
+        dag_dict = state.get("dag_plan")
+        if not dag_dict:
+            return {
+                "messages": [AIMessage(content="没有可执行的计划。")],
+                "error": "无DAG计划",
+            }
+
+        dag_plan = DAGPlan.from_dict(dag_dict)
+
+        # 执行进度回调
+        def on_progress(node):
+            logger.info(f"节点 {node.id} ({node.name}): {node.status.value}")
+
+        # 执行DAG
+        try:
+            results = self.dag_executor.execute(dag_plan, on_node_complete=on_progress)
+
+            # 构建结果报告
+            response_content = "**执行结果**:\n\n"
+
+            for node in dag_plan.nodes:
+                icon = "✓" if node.status.value == "completed" else "✗"
+                response_content += f"{icon} **{node.name}**: {node.status.value}\n"
+
+                if node.result:
+                    # 截断过长的结果
+                    result_str = str(node.result)
+                    if len(result_str) > 500:
+                        result_str = result_str[:500] + "..."
+                    response_content += f"```\n{result_str}\n```\n"
+
+                if node.error:
+                    response_content += f"   错误: {node.error}\n"
+
+            if dag_plan.is_successful():
+                response_content += "\n✓ 所有任务执行完成！"
+            else:
+                response_content += "\n✗ 部分任务执行失败。"
+
+            return {
+                "messages": [AIMessage(content=response_content)],
+                "execution_results": results,
+                "current_phase": AgentPhase.COMPLETED,
+            }
+
+        except Exception as e:
+            logger.error(f"执行失败: {e}")
+            return {
+                "messages": [AIMessage(content=f"执行过程中出错: {str(e)}")],
+                "error": str(e),
+            }
+
+    def _route_after_conversation(
         self,
-        user_message: str,
-        state: Optional[DataAgentState] = None
-    ) -> DataAgentState:
-        """与用户对话
+        state: AgentState
+    ) -> Literal["continue", "plan", "end"]:
+        """
+        对话后的路由决策
+
+        根据对话内容决定下一步行动。
+        """
+        messages = state["messages"]
+        if not messages:
+            return "end"
+
+        last_message = messages[-1]
+
+        # 检查是否是AI消息
+        if isinstance(last_message, AIMessage):
+            # 检查是否包含[READY_TO_PLAN]标记
+            if "[READY_TO_PLAN]" in last_message.content:
+                return "plan"
+            # AI已回复，结束本轮等待用户输入
+            return "end"
+
+        # 检查用户消息
+        if isinstance(last_message, HumanMessage):
+            content = last_message.content.lower()
+
+            # 检查退出命令
+            if content in ["退出", "exit", "quit", "q"]:
+                return "end"
+
+            # 检查是否请求生成计划
+            if any(kw in content for kw in ["生成计划", "开始分析", "执行", "开始"]):
+                return "plan"
+
+            # 用户输入，继续对话
+            return "continue"
+
+        # 检查迭代次数
+        if state.get("iteration_count", 0) >= self.settings.max_iterations:
+            return "end"
+
+        return "end"
+
+    def _route_after_confirmation(
+        self,
+        state: AgentState
+    ) -> Literal["execute", "modify", "cancel"]:
+        """
+        确认后的路由决策
+        """
+        messages = state["messages"]
+        if not messages:
+            return "cancel"
+
+        last_message = messages[-1]
+
+        if isinstance(last_message, HumanMessage):
+            content = last_message.content.lower()
+
+            if any(kw in content for kw in ["执行", "确认", "开始", "是", "yes", "y"]):
+                return "execute"
+            elif any(kw in content for kw in ["修改", "改", "调整"]):
+                return "modify"
+            else:
+                return "cancel"
+
+        return "cancel"
+
+    def chat(self, user_input: str, state: Optional[AgentState] = None) -> tuple:
+        """
+        处理用户输入
 
         Args:
-            user_message: 用户消息
+            user_input: 用户输入
             state: 当前状态（可选）
 
         Returns:
-            更新后的状态
+            tuple: (响应文本, 更新后的状态)
         """
-        # 初始化状态
         if state is None:
-            state = {
-                "messages": [],
-                "user_goal": "",
-                "dag_plan": None,
-                "dag_confirmed": False,
-                "execution_results": [],
-                "current_phase": "interaction",
-                "intermediate_data": {},
-                "db_connection": self.db_connection,
-                "error": None
-            }
+            state = create_initial_state()
 
         # 添加用户消息
-        state["messages"].append(HumanMessage(content=user_message))
+        state["messages"] = state.get("messages", []) + [HumanMessage(content=user_input)]
 
-        # 添加系统消息（如果是首次对话）
-        if len(state["messages"]) == 1:
-            state["messages"].insert(0, SystemMessage(content=self.system_prompt))
+        # 运行图
+        result = self.graph.invoke(state)
 
-        # 调用LLM
-        response = await self.llm.ainvoke(state["messages"])
-        state["messages"].append(AIMessage(content=response.content))
+        # 获取最新的AI响应（最后一条AI消息）
+        messages = result.get("messages", [])
+        response = ""
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage):
+                response = msg.content
+                break
 
-        # 分析响应，判断是否需要生成DAG
-        if self._should_generate_dag(state):
-            state["current_phase"] = "planning"
-            state["user_goal"] = user_message
+        return response, result
 
-            # 生成DAG
-            conversation_history = [msg.content for msg in state["messages"]]
-            dag = await self.dag_generator.generate_dag(
-                user_message,
-                conversation_history,
-                {"db_connection": self.db_connection} if self.db_connection else None
-            )
-
-            state["dag_plan"] = dag.to_dict()
-            state["current_phase"] = "confirmation"
-
-            # 生成确认消息
-            visualizer = DAGVisualizer()
-            dag_text = visualizer.to_execution_plan(dag)
-
-            confirmation_msg = f"""
-我已经为您生成了执行计划：
-
-{dag_text}
-
-请确认是否执行此计划？
-- 输入 'y' 或 'yes' 开始执行
-- 输入 'n' 或 'no' 取消
-- 输入 'm' 修改计划
-"""
-            state["messages"].append(AIMessage(content=confirmation_msg))
-
-        return state
-
-    def _should_generate_dag(self, state: DataAgentState) -> bool:
-        """判断是否应该生成DAG
+    async def achat(self, user_input: str, state: Optional[AgentState] = None) -> tuple:
+        """
+        异步处理用户输入
 
         Args:
-            state: 当前状态
+            user_input: 用户输入
+            state: 当前状态（可选）
 
         Returns:
-            是否应该生成DAG
+            tuple: (响应文本, 更新后的状态)
         """
-        # 如果已经有DAG，不再生成
-        if state.get("dag_plan"):
-            return False
+        if state is None:
+            state = create_initial_state()
 
-        # 如果处于执行或确认阶段，不再生成
-        if state.get("current_phase") in ["confirmation", "execution"]:
-            return False
+        state["messages"] = state.get("messages", []) + [HumanMessage(content=user_input)]
 
-        # 获取最近的AI响应
-        ai_messages = [msg for msg in state["messages"] if isinstance(msg, AIMessage)]
-        if not ai_messages:
-            return False
+        result = await self.graph.ainvoke(state)
 
-        last_ai_message = ai_messages[-1].content.lower()
+        # 获取最新的AI响应（最后一条AI消息）
+        messages = result.get("messages", [])
+        response = ""
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage):
+                response = msg.content
+                break
 
-        # 如果AI明确表示要生成计划，则生成
-        keywords = ["我为您生成", "让我为您规划", "执行计划", "dag"]
-        return any(keyword in last_ai_message for keyword in keywords)
+        return response, result
 
-    async def confirm_dag(
-        self,
-        confirmed: bool,
-        state: DataAgentState
-    ) -> DataAgentState:
-        """确认或拒绝DAG
 
-        Args:
-            confirmed: 是否确认
-            state: 当前状态
+def build_agent_graph() -> StateGraph:
+    """
+    构建Agent状态图
 
-        Returns:
-            更新后的状态
-        """
-        if confirmed:
-            state["dag_confirmed"] = True
-            state["current_phase"] = "execution"
-            state["messages"].append(
-                AIMessage(content="好的，开始执行DAG计划...")
-            )
-        else:
-            # 重置状态
-            state["dag_plan"] = None
-            state["dag_confirmed"] = False
-            state["current_phase"] = "interaction"
-            state["messages"].append(
-                AIMessage(content="已取消。请告诉我您的需求，我会重新为您规划。")
-            )
+    Returns:
+        StateGraph: 编译后的状态图
+    """
+    agent = DataAgent()
+    return agent.graph
 
-        return state
 
-    def get_state_summary(self, state: DataAgentState) -> str:
-        """获取状态摘要
+def create_agent() -> DataAgent:
+    """
+    创建Agent实例
 
-        Args:
-            state: 当前状态
-
-        Returns:
-            状态摘要文本
-        """
-        phase = state.get("current_phase", "interaction")
-        phase_names = {
-            "interaction": "交互中",
-            "planning": "规划中",
-            "confirmation": "等待确认",
-            "execution": "执行中"
-        }
-
-        summary = f"当前阶段: {phase_names.get(phase, phase)}\n"
-
-        if state.get("dag_plan"):
-            summary += f"DAG计划: {state['dag_plan']['name']}\n"
-
-        if state.get("execution_results"):
-            summary += f"已执行节点: {len(state['execution_results'])}\n"
-
-        return summary
+    Returns:
+        DataAgent: Agent实例
+    """
+    return DataAgent()

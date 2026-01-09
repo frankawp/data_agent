@@ -1,0 +1,28 @@
+# MicroSandbox 配置文件
+# 用于定义数据分析Agent的安全执行环境
+
+sandboxes:
+  data_agent:
+    image: python
+    memory: 2048
+    cpus: 2
+    scripts:
+      start: python -c "print('Data Agent Sandbox Ready')"
+    packages:
+      - pandas
+      - numpy
+      - scipy
+      - scikit-learn
+      - networkx
+      - duckdb
+      - matplotlib
+      - seaborn
+
+  # 轻量级沙箱，用于简单的Python脚本执行
+  lightweight:
+    image: python
+    memory: 512
+    cpus: 1
+    packages:
+      - pandas
+      - numpy

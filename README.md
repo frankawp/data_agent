@@ -1,6 +1,6 @@
 # 数据开发Agent
 
-基于LangChain DeepAgents框架开发的智能数据分析Agent，支持多轮交互、自动生成DAG执行计划，并能调用SQL、Python、pandas、scikit-learn、networkx等数据分析工具。
+基于LangGraph和DeepAgents框架开发的智能数据分析Agent，支持多轮交互、自动生成DAG执行计划，并能调用SQL、Python、pandas、scikit-learn、networkx等数据分析工具。
 
 ## 功能特性
 
@@ -8,78 +8,73 @@
 - **自动DAG生成**：Agent理解需求后，自动生成有向无环图（DAG）执行计划
 - **可视化展示**：以Mermaid格式展示执行计划，用户确认后执行
 - **丰富的工具集**：
-  - **SQL工具**：支持MySQL、PostgreSQL数据库查询
-  - **Python执行**：安全的Python代码执行环境
+  - **SQL工具**：支持MySQL、PostgreSQL数据库查询，DuckDB高性能分析
+  - **Python执行**：MicroSandbox安全沙箱执行环境
   - **数据分析**：pandas、numpy、scipy数据处理和统计分析
   - **机器学习**：scikit-learn分类、回归、聚类
   - **图分析**：networkx图算法和网络分析
 - **命令行界面**：基于rich库的美观CLI界面
 
-## 安装
+## 技术栈
 
-### 1. 克隆项目
+- **框架**: LangChain、LangGraph
+- **LLM**: 智谱AI GLM-4.7
+- **数据分析**: pandas、numpy、scipy、DuckDB
+- **机器学习**: scikit-learn
+- **图分析**: networkx
+- **数据库**: SQLAlchemy (MySQL、PostgreSQL)
+- **沙箱**: MicroSandbox
+- **CLI**: rich
+
+## 快速开始
+
+### 1. 安装依赖
 
 ```bash
-cd /Users/frankliu/Code/data_agent
+# 克隆项目
+git clone <repository_url>
+cd data_agent
+
+# 创建虚拟环境
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+# 或 venv\Scripts\activate  # Windows
+
+# 安装依赖
+pip install -e .
 ```
 
-### 2. 激活虚拟环境
+### 2. 配置环境
 
 ```bash
-source .venv/bin/activate
+# 复制环境变量模板
+cp .env.example .env
+
+# 编辑.env文件，填入您的配置
+# API_KEY=你的智谱AI API密钥
+# DB_CONNECTION=你的数据库连接字符串
 ```
 
-### 3. 安装依赖
-
-依赖已经在项目初始化时安装完成。如果需要重新安装：
+### 3. 可选：安装MicroSandbox
 
 ```bash
-pip install -r requirements.txt
+# macOS/Linux
+curl -sSL https://get.microsandbox.dev | sh
+msb server start
+msb pull microsandbox/python
 ```
 
-## 配置
-
-### API密钥
-
-需要设置Anthropic API密钥：
+### 4. 启动Agent
 
 ```bash
-export ANTHROPIC_API_KEY="your-api-key-here"
-```
-
-或者在运行时通过参数指定：
-
-```bash
-python -m data_agent.main --api-key your-api-key-here
-```
-
-### 数据库连接（可选）
-
-如果要使用数据库功能，可以通过参数指定数据库连接：
-
-```bash
-python -m data_agent.main --db "mysql+pymysql://user:password@localhost:3306/database"
-```
-
-支持的数据库格式：
-- MySQL: `mysql+pymysql://user:password@host:port/database`
-- PostgreSQL: `postgresql+psycopg2://user:password@host:port/database`
-
-## 使用方法
-
-### 启动Agent
-
-```bash
-python -m data_agent.main
-```
-
-或者使用安装的命令行工具（如果已安装）：
-
-```bash
+# 方式1：使用命令行
 data-agent
+
+# 方式2：使用Python模块
+python -m data_agent
 ```
 
-### 交互示例
+## 使用示例
 
 ```
 # 启动后，直接描述你的需求
@@ -108,80 +103,51 @@ Agent: 明白了。我将为您生成一个执行计划...
 ✓ 所有任务执行完成！
 ```
 
-### 命令列表
-
-- `exit` / `quit`: 退出程序
-- `help`: 显示帮助信息
-- `clear`: 清空屏幕
-- `status`: 查看当前状态
-
 ## 项目结构
 
 ```
 data_agent/
-├── src/data_agent/
-│   ├── main.py                      # CLI入口
-│   ├── agent/
-│   │   ├── core.py                  # 核心Agent逻辑
-│   │   └── executor.py              # DAG执行器
-│   ├── tools/
-│   │   ├── sql_tools.py             # SQL工具
-│   │   ├── python_tools.py          # Python执行工具
-│   │   ├── data_tools.py            # 数据分析工具
-│   │   ├── ml_tools.py              # 机器学习工具
-│   │   └── graph_tools.py           # 图分析工具
-│   ├── dag/
-│   │   ├── models.py                # DAG数据模型
-│   │   ├── generator.py             # DAG生成器
-│   │   └── visualizer.py            # DAG可视化
-│   ├── state/
-│   │   └── graph_state.py           # 状态定义
-│   └── config/
-│       └── settings.py              # 配置管理
-├── requirements.txt
-├── pyproject.toml
-└── README.md
+├── pyproject.toml              # 项目配置
+├── requirements.txt            # 依赖列表
+├── Sandboxfile                 # MicroSandbox配置
+├── .env.example                # 环境变量模板
+├── src/
+│   └── data_agent/
+│       ├── main.py             # CLI入口
+│       ├── config/             # 配置管理
+│       ├── agent/              # Agent核心
+│       ├── dag/                # DAG系统
+│       ├── sandbox/            # 沙箱管理
+│       ├── tools/              # 工具集
+│       └── state/              # 状态管理
+└── tests/                      # 测试
 ```
 
-## 技术栈
+## 配置说明
 
-- **框架**: LangChain、DeepAgents、LangGraph
-- **LLM**: Anthropic Claude (Sonnet 4.5)
-- **数据分析**: pandas、numpy、scipy
-- **机器学习**: scikit-learn
-- **图分析**: networkx
-- **数据库**: SQLAlchemy (支持MySQL、PostgreSQL)
-- **CLI**: rich
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| API_KEY | 智谱AI API密钥 | 必填 |
+| BASE_URL | API基础URL | https://open.bigmodel.cn/api/paas/v4/ |
+| MODEL | 模型名称 | glm-4.7 |
+| DB_CONNECTION | 数据库连接字符串 | 必填 |
+| SANDBOX_ENABLED | 是否启用沙箱 | true |
+| DUCKDB_MEMORY_LIMIT | DuckDB内存限制 | 4GB |
 
 ## 开发
 
-### 运行测试
-
 ```bash
-pytest tests/
-```
+# 安装开发依赖
+pip install -e ".[dev]"
 
-### 代码格式化
+# 运行测试
+pytest
 
-```bash
+# 代码格式化
 black src/
 ruff check src/
 ```
 
-## 注意事项
-
-1. **安全性**：Python代码执行在隔离环境中进行，但仍需注意不要执行不受信任的代码
-2. **数据库**：SQL查询使用SQLAlchemy参数化，防止SQL注入
-3. **资源限制**：大数据集处理时注意内存使用
-
 ## 许可证
 
 MIT License
-
-## 贡献
-
-欢迎提交Issue和Pull Request！
-
-## 作者
-
-Your Name <your.email@example.com>

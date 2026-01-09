@@ -1,157 +1,226 @@
-"""Python代码执行工具"""
+"""
+Python执行工具
 
-import sys
-import traceback
-import json
-from typing import Optional, Dict, Any
-from io import StringIO
-from langchain_core.tools import StructuredTool
+在安全沙箱中执行Python代码。
+"""
+
+import asyncio
+import logging
+from typing import Optional
+
+from langchain_core.tools import tool
+
+from ..sandbox.microsandbox import DataAgentSandbox, execute_python_sync
+
+logger = logging.getLogger(__name__)
 
 
-def execute_python_code(
-    code: str,
-    context_vars: Optional[str] = None
-) -> str:
-    """安全地执行Python代码
+@tool
+def execute_python_safe(code: str, timeout: int = 30) -> str:
+    """
+    在安全沙箱中执行Python代码
+
+    代码将在隔离的环境中执行，可以使用pandas、numpy、duckdb等
+    数据分析库。执行结果通过print输出。
 
     Args:
-        code: 要执行的Python代码
-        context_vars: 预定义的上下文变量（JSON格式字符串）
+        code: Python代码
+        timeout: 执行超时时间（秒），默认30秒
 
     Returns:
-        执行结果或错误信息（JSON格式）
+        代码执行输出
 
-    Examples:
-        >>> execute_python_code(
-        ...     "import pandas as pd\\ndf = pd.DataFrame({'a': [1,2,3]})\\nprint(df)"
-        ... )
+    示例:
+        # 数据处理
+        execute_python_safe('''
+        import pandas as pd
+        import numpy as np
+
+        data = {'name': ['Alice', 'Bob'], 'age': [25, 30]}
+        df = pd.DataFrame(data)
+        print(df.describe())
+        ''')
+
+        # 数学计算
+        execute_python_safe('''
+        result = sum(range(100))
+        print(f"1到99的和是: {result}")
+        ''')
     """
-    import pandas as pd
-    import numpy as np
-    import scipy
-    import sklearn
-    import networkx as nx
+    result = execute_python_sync(code, timeout=timeout)
 
-    # 创建隔离的执行环境
-    output = StringIO()
-    error_output = StringIO()
+    if result.success:
+        output = result.output
+        if result.error:
+            output += f"\n警告: {result.error}"
+        return output if output else "代码执行成功，无输出"
+    else:
+        return f"执行失败: {result.error}"
 
-    # 准备执行环境
-    exec_globals = {
-        'pd': pd,
-        'numpy': np,
-        'np': np,
-        'scipy': scipy,
-        'sklearn': sklearn,
-        'nx': nx,
-        'networkx': nx,
-        '__builtins__': __builtins__,
-    }
 
-    # 解析上下文变量
-    if context_vars:
-        try:
-            additional_vars = json.loads(context_vars)
-            exec_globals.update(additional_vars)
-        except Exception as e:
-            return json.dumps({
-                "success": False,
-                "error": f"上下文变量解析失败: {str(e)}"
-            }, ensure_ascii=False, indent=2)
+@tool
+async def execute_python_async(code: str, timeout: int = 30) -> str:
+    """
+    异步执行Python代码
+
+    与execute_python_safe相同，但支持异步执行。
+
+    Args:
+        code: Python代码
+        timeout: 执行超时时间（秒）
+
+    Returns:
+        代码执行输出
+    """
+    async with DataAgentSandbox(timeout=timeout) as sandbox:
+        result = await sandbox.execute(code)
+
+        if result.success:
+            output = result.output
+            if result.error:
+                output += f"\n警告: {result.error}"
+            return output if output else "代码执行成功，无输出"
+        else:
+            return f"执行失败: {result.error}"
+
+
+@tool
+def execute_python_with_data(code: str, data_json: str) -> str:
+    """
+    执行Python代码并传入JSON数据
+
+    数据将作为名为'data'的变量注入代码环境。
+
+    Args:
+        code: Python代码
+        data_json: JSON格式的数据
+
+    Returns:
+        代码执行输出
+
+    示例:
+        execute_python_with_data(
+            code='''
+            import pandas as pd
+            df = pd.DataFrame(data)
+            print(df.head())
+            ''',
+            data_json='[{"name": "Alice", "age": 25}, {"name": "Bob", "age": 30}]'
+        )
+    """
+    import json
 
     try:
-        # 重定向输出
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
-        sys.stdout = output
-        sys.stderr = error_output
+        data = json.loads(data_json)
+    except json.JSONDecodeError as e:
+        return f"JSON解析错误: {str(e)}"
 
-        # 执行代码
-        exec(code, exec_globals)
+    # 构建完整代码
+    full_code = f"import json\ndata = json.loads('''{data_json}''')\n{code}"
 
-        # 恢复输出
-        sys.stdout = old_stdout
-        sys.stderr = old_stderr
+    result = execute_python_sync(full_code)
 
-        # 获取输出
-        stdout_result = output.getvalue()
-        stderr_result = error_output.getvalue()
-
-        result = {
-            "success": True,
-            "output": stdout_result if stdout_result else "代码执行成功（无输出）"
-        }
-
-        if stderr_result:
-            result["stderr"] = stderr_result
-
-        return json.dumps(result, ensure_ascii=False, indent=2)
-
-    except Exception as e:
-        # 恢复输出
-        sys.stdout = old_stdout
-        sys.stderr = old_stderr
-
-        return json.dumps({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }, ensure_ascii=False, indent=2)
-    finally:
-        sys.stdout = old_stdout
-        sys.stderr = old_stderr
+    if result.success:
+        return result.output if result.output else "代码执行成功，无输出"
+    else:
+        return f"执行失败: {result.error}"
 
 
-def execute_data_analysis_code(
-    code: str,
-    data: Optional[str] = None
-) -> str:
-    """执行数据分析代码（带数据输入）
+@tool
+def validate_python_code(code: str) -> str:
+    """
+    验证Python代码语法
+
+    检查代码是否有语法错误，但不执行代码。
 
     Args:
-        code: 要执行的Python代码
-        data: 输入数据（JSON格式字符串，会自动转换为DataFrame）
+        code: Python代码
 
     Returns:
-        执行结果（JSON格式）
+        验证结果
     """
-    import pandas as pd
-    import numpy as np
+    import ast
 
-    context_vars = {}
-
-    # 如果提供了数据，转换为DataFrame
-    if data:
-        try:
-            data_dict = json.loads(data)
-            if isinstance(data_dict, list):
-                # 如果是列表，转换为DataFrame
-                df = pd.DataFrame(data_dict)
-                context_vars['input_data'] = df
-                context_vars['df'] = df
-        except Exception as e:
-            return json.dumps({
-                "success": False,
-                "error": f"数据解析失败: {str(e)}"
-            }, ensure_ascii=False)
-
-    # 使用上下文变量执行代码
-    context_json = json.dumps(context_vars) if context_vars else None
-    return execute_python_code(code, context_json)
+    try:
+        ast.parse(code)
+        return "代码语法正确"
+    except SyntaxError as e:
+        return f"语法错误 (行 {e.lineno}): {e.msg}"
 
 
-# 创建LangChain工具
-python_execute_tool = StructuredTool.from_function(
-    func=execute_python_code,
-    name="python_execute",
-    description="执行Python代码。支持pandas、numpy、scipy、sklearn、networkx等库。参数: code（Python代码字符串）, context_vars（可选的上下文变量JSON字符串）"
-)
+def get_safe_builtins() -> dict:
+    """
+    获取安全的内置函数列表
 
-python_data_analysis_tool = StructuredTool.from_function(
-    func=execute_data_analysis_code,
-    name="python_data_analysis",
-    description="执行Python数据分析代码。自动处理输入数据并转换为DataFrame。参数: code（Python代码）, data（可选的输入数据JSON字符串）"
-)
+    Returns:
+        允许在沙箱中使用的内置函数
+    """
+    return {
+        # 基本类型
+        "int": int,
+        "float": float,
+        "str": str,
+        "bool": bool,
+        "list": list,
+        "dict": dict,
+        "tuple": tuple,
+        "set": set,
+        "frozenset": frozenset,
+        "bytes": bytes,
+        "bytearray": bytearray,
 
-# 导出所有工具
-PYTHON_TOOLS = [python_execute_tool, python_data_analysis_tool]
+        # 常用函数
+        "len": len,
+        "range": range,
+        "print": print,
+        "type": type,
+        "isinstance": isinstance,
+        "issubclass": issubclass,
+        "hasattr": hasattr,
+        "getattr": getattr,
+        "setattr": setattr,
+        "delattr": delattr,
+        "callable": callable,
+
+        # 数学函数
+        "abs": abs,
+        "round": round,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "pow": pow,
+        "divmod": divmod,
+
+        # 序列操作
+        "sorted": sorted,
+        "reversed": reversed,
+        "enumerate": enumerate,
+        "zip": zip,
+        "map": map,
+        "filter": filter,
+        "all": all,
+        "any": any,
+
+        # 字符串
+        "chr": chr,
+        "ord": ord,
+        "format": format,
+        "repr": repr,
+
+        # 其他
+        "id": id,
+        "hash": hash,
+        "iter": iter,
+        "next": next,
+        "slice": slice,
+
+        # 异常
+        "Exception": Exception,
+        "ValueError": ValueError,
+        "TypeError": TypeError,
+        "KeyError": KeyError,
+        "IndexError": IndexError,
+        "AttributeError": AttributeError,
+        "RuntimeError": RuntimeError,
+        "StopIteration": StopIteration,
+    }

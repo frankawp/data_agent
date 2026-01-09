@@ -1,156 +1,236 @@
-"""DAG可视化工具"""
+"""
+DAG可视化
 
-from typing import Dict, Any
-from .models import DAGPlan
+将DAG计划转换为Mermaid图表格式。
+"""
+
+from typing import Optional
+from .models import DAGPlan, NodeStatus
 
 
 class DAGVisualizer:
-    """DAG可视化工具类
+    """
+    DAG可视化器
 
-    提供多种格式的DAG可视化输出
+    将DAG计划转换为Mermaid格式，支持在CLI中展示。
     """
 
-    @staticmethod
-    def to_mermaid(dag: DAGPlan) -> str:
-        """生成Mermaid格式的流程图
+    # 节点状态对应的样式
+    STATUS_STYLES = {
+        NodeStatus.PENDING: "fill:#f9f9f9,stroke:#333",
+        NodeStatus.RUNNING: "fill:#fff3cd,stroke:#856404",
+        NodeStatus.COMPLETED: "fill:#d4edda,stroke:#155724",
+        NodeStatus.FAILED: "fill:#f8d7da,stroke:#721c24",
+        NodeStatus.SKIPPED: "fill:#e2e3e5,stroke:#383d41",
+    }
+
+    # 状态图标
+    STATUS_ICONS = {
+        NodeStatus.PENDING: "○",
+        NodeStatus.RUNNING: "◐",
+        NodeStatus.COMPLETED: "✓",
+        NodeStatus.FAILED: "✗",
+        NodeStatus.SKIPPED: "⊘",
+    }
+
+    def to_mermaid(self, dag: DAGPlan, show_status: bool = True) -> str:
+        """
+        将DAG转换为Mermaid格式
 
         Args:
-            dag: DAG计划实例
+            dag: DAG计划
+            show_status: 是否显示节点状态
 
         Returns:
-            Mermaid格式的字符串
+            Mermaid格式的图表字符串
         """
-        return dag.to_mermaid()
+        lines = ["graph TD"]
 
-    @staticmethod
-    def to_ascii(dag: DAGPlan) -> str:
-        """生成ASCII艺术图
+        # 添加节点
+        for node in dag.nodes:
+            label = self._get_node_label(node, show_status)
+            lines.append(f'    {node.id}["{label}"]')
 
-        Args:
-            dag: DAG计划实例
+        # 添加边
+        for node in dag.nodes:
+            for dep in node.dependencies:
+                lines.append(f"    {dep} --> {node.id}")
 
-        Returns:
-            ASCII格式的文本图
-        """
-        lines = []
-        lines.append("=" * 60)
-        lines.append(f"DAG: {dag.name}")
-        lines.append("=" * 60)
-        lines.append(f"\n描述: {dag.description}\n")
-
-        # 获取执行顺序
-        sorted_nodes = dag.topological_sort()
-
-        lines.append("执行步骤:")
-        lines.append("-" * 60)
-
-        for i, node in enumerate(sorted_nodes, 1):
-            deps = ", ".join(node.dependencies) if node.dependencies else "无"
-            lines.append(f"\n{i}. {node.name}")
-            lines.append(f"   工具: {node.tool}")
-            lines.append(f"   依赖: {deps}")
-            if node.description:
-                lines.append(f"   说明: {node.description}")
-
-        # 添加预估时间
-        if dag.estimated_time:
-            lines.append(f"\n预估执行时间: {dag.estimated_time} 秒")
+        # 添加样式
+        if show_status:
+            for status, style in self.STATUS_STYLES.items():
+                nodes_with_status = [n.id for n in dag.nodes if n.status == status]
+                if nodes_with_status:
+                    for node_id in nodes_with_status:
+                        lines.append(f"    style {node_id} {style}")
 
         return "\n".join(lines)
 
-    @staticmethod
-    def to_markdown(dag: DAGPlan) -> str:
-        """生成Markdown格式的文档
+    def _get_node_label(self, node, show_status: bool) -> str:
+        """获取节点标签"""
+        if show_status:
+            icon = self.STATUS_ICONS.get(node.status, "")
+            return f"{icon} {node.name}"
+        return node.name
+
+    def to_ascii(self, dag: DAGPlan) -> str:
+        """
+        将DAG转换为ASCII格式
+
+        简单的文本表示，适合CLI显示。
 
         Args:
-            dag: DAG计划实例
+            dag: DAG计划
 
         Returns:
-            Markdown格式的文档
+            ASCII格式的图表字符串
         """
-        md = f"""# {dag.name}
+        lines = []
+        lines.append(f"╔{'═' * 50}╗")
+        lines.append(f"║ {dag.name:^48} ║")
+        lines.append(f"╠{'═' * 50}╣")
 
-## 描述
-{dag.description}
+        # 拓扑排序获取执行顺序
+        try:
+            sorted_nodes = dag.topological_sort()
+        except ValueError:
+            sorted_nodes = dag.nodes
 
-## 执行计划
+        for i, node in enumerate(sorted_nodes):
+            icon = self.STATUS_ICONS.get(node.status, "○")
+            status_text = node.status.value
 
-"""
-        sorted_nodes = dag.topological_sort()
+            # 节点信息
+            node_line = f"║ {icon} [{node.id}] {node.name}"
+            node_line = f"{node_line:<48} ║"
+            lines.append(node_line)
 
-        for i, node in enumerate(sorted_nodes, 1):
-            md += f"\n### 步骤 {i}: {node.name}\n\n"
-            md += f"- **工具**: {node.tool}\n"
+            # 工具和参数
+            tool_line = f"║   工具: {node.tool}"
+            tool_line = f"{tool_line:<48} ║"
+            lines.append(tool_line)
+
+            # 依赖
             if node.dependencies:
-                md += f"- **依赖**: {', '.join(node.dependencies)}\n"
-            if node.description:
-                md += f"- **说明**: {node.description}\n"
-            if node.inputs:
-                import json
-                md += f"- **参数**: \n```json\n{json.dumps(node.inputs, indent=2, ensure_ascii=False)}\n```\n"
+                deps = ", ".join(node.dependencies)
+                dep_line = f"║   依赖: {deps}"
+                dep_line = f"{dep_line:<48} ║"
+                lines.append(dep_line)
 
-        if dag.estimated_time:
-            md += f"\n**预估执行时间**: {dag.estimated_time} 秒\n"
+            # 状态
+            status_line = f"║   状态: {status_text}"
+            status_line = f"{status_line:<48} ║"
+            lines.append(status_line)
 
-        md += "\n## 流程图\n\n"
-        md += "```mermaid\n"
-        md += dag.to_mermaid()
-        md += "\n```\n"
+            # 分隔线
+            if i < len(sorted_nodes) - 1:
+                lines.append(f"╟{'─' * 50}╢")
 
-        return md
-
-    @staticmethod
-    def to_execution_plan(dag: DAGPlan) -> str:
-        """生成执行计划文本（用户友好的格式）
-
-        Args:
-            dag: DAG计划实例
-
-        Returns:
-            格式化的执行计划文本
-        """
-        lines = []
-        lines.append("╔" + "═" * 58 + "╗")
-        lines.append("║" + " " * 58 + "║")
-        lines.append(f"║{' ' * ((58 - len(dag.name)) // 2)}{dag.name}{' ' * (58 - ((58 - len(dag.name)) // 2) - len(dag.name))}║")
-        lines.append("║" + " " * 58 + "║")
-        lines.append("╚" + "═" * 58 + "╝")
-        lines.append(f"\n📋 {dag.description}\n")
-
-        # 获取执行层级
-        levels = dag.get_execution_order()
-
-        lines.append("执行计划:")
-        lines.append("─" * 60)
-
-        for level_num, level_nodes in enumerate(levels, 1):
-            lines.append(f"\n阶段 {level_num}:")
-            for node_id in level_nodes:
-                node = dag.get_node_by_id(node_id)
-                if node:
-                    deps = f" (依赖: {', '.join(node.dependencies)})" if node.dependencies else ""
-                    lines.append(f"  • {node.name} - 使用 {node.tool} 工具{deps}")
-
-        if dag.estimated_time:
-            lines.append(f"\n⏱️  预计耗时: {dag.estimated_time} 秒")
+        lines.append(f"╚{'═' * 50}╝")
 
         return "\n".join(lines)
 
-    @staticmethod
-    def print_dag(dag: DAGPlan, format: str = "ascii") -> None:
-        """打印DAG（默认使用ASCII格式）
+    def to_rich_panel(self, dag: DAGPlan) -> str:
+        """
+        生成适合rich库显示的格式
 
         Args:
-            dag: DAG计划实例
-            format: 输出格式 (ascii/mermaid/markdown/plan)
+            dag: DAG计划
+
+        Returns:
+            富文本格式字符串
         """
-        if format == "ascii":
-            print(DAGVisualizer.to_ascii(dag))
-        elif format == "mermaid":
-            print(DAGVisualizer.to_mermaid(dag))
-        elif format == "markdown":
-            print(DAGVisualizer.to_markdown(dag))
-        elif format == "plan":
-            print(DAGVisualizer.to_execution_plan(dag))
-        else:
-            raise ValueError(f"不支持的格式: {format}")
+        from rich.table import Table
+        from rich.panel import Panel
+        from io import StringIO
+        from rich.console import Console
+
+        table = Table(title=dag.name, show_header=True, header_style="bold")
+        table.add_column("ID", style="cyan")
+        table.add_column("名称", style="white")
+        table.add_column("工具", style="green")
+        table.add_column("依赖", style="yellow")
+        table.add_column("状态", style="magenta")
+
+        # 状态颜色映射
+        status_colors = {
+            NodeStatus.PENDING: "white",
+            NodeStatus.RUNNING: "yellow",
+            NodeStatus.COMPLETED: "green",
+            NodeStatus.FAILED: "red",
+            NodeStatus.SKIPPED: "dim",
+        }
+
+        try:
+            sorted_nodes = dag.topological_sort()
+        except ValueError:
+            sorted_nodes = dag.nodes
+
+        for node in sorted_nodes:
+            deps = ", ".join(node.dependencies) if node.dependencies else "-"
+            status_color = status_colors.get(node.status, "white")
+            icon = self.STATUS_ICONS.get(node.status, "○")
+
+            table.add_row(
+                node.id,
+                node.name,
+                node.tool,
+                deps,
+                f"[{status_color}]{icon} {node.status.value}[/{status_color}]"
+            )
+
+        # 渲染到字符串
+        console = Console(file=StringIO(), force_terminal=True)
+        console.print(table)
+        return console.file.getvalue()
+
+    def print_progress(self, dag: DAGPlan):
+        """
+        打印执行进度
+
+        Args:
+            dag: DAG计划
+        """
+        from rich.console import Console
+        from rich.progress import Progress, TaskID
+
+        console = Console()
+        progress = dag.get_progress()
+        total = len(dag.nodes)
+        completed = progress["completed"]
+        failed = progress["failed"]
+        running = progress["running"]
+
+        # 进度条
+        pct = (completed / total * 100) if total > 0 else 0
+
+        console.print(f"\n[bold]执行进度[/bold]: {completed}/{total} ({pct:.0f}%)")
+        console.print(f"  ✓ 完成: {completed}  ◐ 运行中: {running}  ✗ 失败: {failed}")
+
+        # 显示失败的任务
+        if failed > 0:
+            console.print("\n[red]失败的任务:[/red]")
+            for node in dag.nodes:
+                if node.status == NodeStatus.FAILED:
+                    console.print(f"  - {node.name}: {node.error}")
+
+
+def visualize_dag(dag: DAGPlan, format: str = "ascii") -> str:
+    """
+    便捷函数：可视化DAG
+
+    Args:
+        dag: DAG计划
+        format: 输出格式 (mermaid, ascii, rich)
+
+    Returns:
+        可视化结果字符串
+    """
+    viz = DAGVisualizer()
+
+    if format == "mermaid":
+        return viz.to_mermaid(dag)
+    elif format == "rich":
+        return viz.to_rich_panel(dag)
+    else:
+        return viz.to_ascii(dag)

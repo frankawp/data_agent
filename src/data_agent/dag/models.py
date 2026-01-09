@@ -1,174 +1,227 @@
-"""DAG数据模型定义"""
+"""
+DAG数据模型
 
-from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, Field
+定义DAG节点和执行计划的数据结构。
+"""
+
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Dict, Any, List, Optional, Tuple
 import json
 
 
-class DAGNode(BaseModel):
-    """DAG节点
+class NodeStatus(str, Enum):
+    """节点执行状态"""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
 
-    代表执行计划中的一个任务节点
+
+@dataclass
+class DAGNode:
     """
-    id: str = Field(..., description="节点唯一ID")
-    name: str = Field(..., description="节点名称")
-    tool: str = Field(..., description="使用的工具名称")
-    inputs: Dict[str, Any] = Field(default_factory=dict, description="工具输入参数")
-    dependencies: List[str] = Field(default_factory=list, description="依赖的节点ID列表")
-    description: Optional[str] = Field(None, description="节点描述")
+    DAG节点
 
-    class Config:
-        json_encoders = {
-            # 确保中文字符正确编码
-        }
-
-
-class DAGPlan(BaseModel):
-    """DAG执行计划
-
-    定义完整的数据分析执行流程
+    表示执行计划中的一个任务节点。
     """
-    id: str = Field(..., description="DAG唯一ID")
-    name: str = Field(..., description="DAG名称")
-    description: str = Field(..., description="DAG描述")
-    nodes: List[DAGNode] = Field(..., description="所有节点")
-    edges: List[Dict[str, str]] = Field(default_factory=list, description="节点之间的边")
-    estimated_time: Optional[int] = Field(None, description="预估执行时间（秒）")
-
-    def to_mermaid(self) -> str:
-        """转换为Mermaid流程图格式
-
-        Returns:
-            Mermaid格式的流程图字符串
-        """
-        mermaid_lines = ["graph TD"]
-
-        # 添加节点
-        for node in self.nodes:
-            label = f"{node.name}\\n({node.tool})"
-            mermaid_lines.append(f'    {node.id}["{label}"]')
-
-        # 添加边
-        for edge in self.edges:
-            mermaid_lines.append(f"    {edge['from']} --> {edge['to']}")
-
-        return "\n".join(mermaid_lines)
-
-    def topological_sort(self) -> List[DAGNode]:
-        """拓扑排序，返回可执行的节点顺序
-
-        Returns:
-            按依赖关系排序的节点列表
-
-        Raises:
-            ValueError: 如果DAG包含循环依赖
-        """
-        # 计算入度
-        in_degree = {node.id: 0 for node in self.nodes}
-        graph = {node.id: [] for node in self.nodes}
-
-        # 构建图和入度
-        for edge in self.edges:
-            graph[edge['from']].append(edge['to'])
-            in_degree[edge['to']] += 1
-
-        # 找到所有入度为0的节点
-        queue = [node_id for node_id, degree in in_degree.items() if degree == 0]
-        result = []
-
-        while queue:
-            node_id = queue.pop(0)
-            node = next(n for n in self.nodes if n.id == node_id)
-            result.append(node)
-
-            # 减少邻居节点的入度
-            for neighbor in graph[node_id]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
-
-        # 检查是否有循环依赖
-        if len(result) != len(self.nodes):
-            raise ValueError("DAG包含循环依赖，无法进行拓扑排序")
-
-        return result
-
-    def get_execution_order(self) -> List[List[str]]:
-        """获取执行层级（可以并行执行的节点）
-
-        Returns:
-            二维列表，每个子列表包含可以并行执行的节点ID
-        """
-        sorted_nodes = self.topological_sort()
-        levels = []
-        node_level = {}
-        executed_nodes = set()
-
-        for node in sorted_nodes:
-            # 找到所有依赖的层级
-            dep_levels = []
-            for dep in node.dependencies:
-                if dep in node_level:
-                    dep_levels.append(node_level[dep])
-
-            # 当前节点层级 = 最大依赖层级 + 1
-            current_level = max(dep_levels) + 1 if dep_levels else 0
-            node_level[node.id] = current_level
-
-            # 添加到对应层级
-            while len(levels) <= current_level:
-                levels.append([])
-            levels[current_level].append(node.id)
-
-            executed_nodes.add(node.id)
-
-        return levels
+    id: str
+    name: str
+    tool: str
+    params: Dict[str, Any] = field(default_factory=dict)
+    dependencies: List[str] = field(default_factory=list)
+    status: NodeStatus = NodeStatus.PENDING
+    result: Optional[str] = None
+    error: Optional[str] = None
+    execution_time: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典格式
-
-        Returns:
-            DAG的字典表示
-        """
+        """转换为字典"""
         return {
             "id": self.id,
             "name": self.name,
-            "description": self.description,
-            "nodes": [node.dict() for node in self.nodes],
-            "edges": self.edges,
-            "estimated_time": self.estimated_time
+            "tool": self.tool,
+            "params": self.params,
+            "dependencies": self.dependencies,
+            "status": self.status.value,
+            "result": self.result,
+            "error": self.error,
+            "execution_time": self.execution_time,
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'DAGPlan':
-        """从字典创建DAGPlan
-
-        Args:
-            data: DAG的字典表示
-
-        Returns:
-            DAGPlan实例
-        """
-        nodes = [DAGNode(**node_data) for node_data in data.get("nodes", [])]
+    def from_dict(cls, data: Dict[str, Any]) -> "DAGNode":
+        """从字典创建"""
         return cls(
             id=data["id"],
             name=data["name"],
-            description=data["description"],
-            nodes=nodes,
-            edges=data.get("edges", []),
-            estimated_time=data.get("estimated_time")
+            tool=data["tool"],
+            params=data.get("params", {}),
+            dependencies=data.get("dependencies", []),
+            status=NodeStatus(data.get("status", "pending")),
+            result=data.get("result"),
+            error=data.get("error"),
+            execution_time=data.get("execution_time", 0.0),
         )
 
-    def get_node_by_id(self, node_id: str) -> Optional[DAGNode]:
-        """根据ID获取节点
+    def is_ready(self, completed_nodes: set) -> bool:
+        """检查节点是否可以执行（所有依赖已完成）"""
+        return all(dep in completed_nodes for dep in self.dependencies)
 
-        Args:
-            node_id: 节点ID
+
+@dataclass
+class DAGPlan:
+    """
+    DAG执行计划
+
+    包含多个节点和它们之间的依赖关系。
+    """
+    nodes: List[DAGNode] = field(default_factory=list)
+    name: str = "执行计划"
+    description: str = ""
+
+    def __post_init__(self):
+        """初始化后处理"""
+        self._node_map: Dict[str, DAGNode] = {}
+        self._update_node_map()
+
+    def _update_node_map(self):
+        """更新节点映射"""
+        self._node_map = {node.id: node for node in self.nodes}
+
+    def add_node(self, node: DAGNode):
+        """添加节点"""
+        self.nodes.append(node)
+        self._node_map[node.id] = node
+
+    def get_node(self, node_id: str) -> Optional[DAGNode]:
+        """获取节点"""
+        return self._node_map.get(node_id)
+
+    def get_edges(self) -> List[Tuple[str, str]]:
+        """获取所有边（依赖关系）"""
+        edges = []
+        for node in self.nodes:
+            for dep in node.dependencies:
+                edges.append((dep, node.id))
+        return edges
+
+    def topological_sort(self) -> List[DAGNode]:
+        """
+        拓扑排序
+
+        返回按执行顺序排列的节点列表。
+
+        Raises:
+            ValueError: 如果存在循环依赖
+        """
+        in_degree = {node.id: len(node.dependencies) for node in self.nodes}
+        queue = [node for node in self.nodes if in_degree[node.id] == 0]
+        result = []
+
+        while queue:
+            node = queue.pop(0)
+            result.append(node)
+
+            for other in self.nodes:
+                if node.id in other.dependencies:
+                    in_degree[other.id] -= 1
+                    if in_degree[other.id] == 0:
+                        queue.append(other)
+
+        if len(result) != len(self.nodes):
+            raise ValueError("DAG存在循环依赖")
+
+        return result
+
+    def get_ready_nodes(self) -> List[DAGNode]:
+        """获取当前可执行的节点（依赖已完成且状态为pending）"""
+        completed = {node.id for node in self.nodes if node.status == NodeStatus.COMPLETED}
+        return [
+            node for node in self.nodes
+            if node.status == NodeStatus.PENDING and node.is_ready(completed)
+        ]
+
+    def validate(self) -> List[str]:
+        """
+        验证DAG合法性
 
         Returns:
-            DAGNode实例，如果未找到则返回None
+            错误列表，空列表表示验证通过
         """
+        errors = []
+
+        # 检查节点ID唯一性
+        ids = [node.id for node in self.nodes]
+        if len(ids) != len(set(ids)):
+            errors.append("存在重复的节点ID")
+
+        # 检查依赖是否存在
         for node in self.nodes:
-            if node.id == node_id:
-                return node
-        return None
+            for dep in node.dependencies:
+                if dep not in self._node_map:
+                    errors.append(f"节点 {node.id} 依赖不存在的节点 {dep}")
+
+        # 检查循环依赖
+        try:
+            self.topological_sort()
+        except ValueError:
+            errors.append("存在循环依赖")
+
+        return errors
+
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "nodes": [node.to_dict() for node in self.nodes],
+        }
+
+    def to_json(self) -> str:
+        """转换为JSON"""
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "DAGPlan":
+        """从字典创建"""
+        nodes = [DAGNode.from_dict(n) for n in data.get("nodes", [])]
+        plan = cls(
+            nodes=nodes,
+            name=data.get("name", "执行计划"),
+            description=data.get("description", ""),
+        )
+        return plan
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "DAGPlan":
+        """从JSON创建"""
+        data = json.loads(json_str)
+        return cls.from_dict(data)
+
+    def get_progress(self) -> Dict[str, int]:
+        """获取执行进度"""
+        status_counts = {
+            "pending": 0,
+            "running": 0,
+            "completed": 0,
+            "failed": 0,
+            "skipped": 0,
+        }
+        for node in self.nodes:
+            status_counts[node.status.value] += 1
+        return status_counts
+
+    def is_completed(self) -> bool:
+        """检查是否全部完成"""
+        return all(
+            node.status in [NodeStatus.COMPLETED, NodeStatus.SKIPPED, NodeStatus.FAILED]
+            for node in self.nodes
+        )
+
+    def is_successful(self) -> bool:
+        """检查是否成功完成（无失败节点）"""
+        return self.is_completed() and all(
+            node.status != NodeStatus.FAILED for node in self.nodes
+        )
