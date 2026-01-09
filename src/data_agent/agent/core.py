@@ -8,7 +8,8 @@ import logging
 from typing import Dict, Any, Optional, Literal
 
 from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langgraph.prebuilt import ToolNode
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 
 from ..state.graph_state import AgentState, AgentPhase, create_initial_state
 from ..dag.models import DAGPlan
@@ -18,8 +19,37 @@ from .executor import DAGExecutor
 from .zhipu_llm import create_zhipu_llm
 from ..config.prompts import MAIN_AGENT_PROMPT, CONVERSATION_PROMPT
 from ..config.settings import get_settings
+from ..tools import (
+    execute_sql, query_with_duckdb, query_parquet,
+    execute_python_safe,
+    analyze_dataframe, statistical_analysis, analyze_large_dataset,
+    train_model, predict, evaluate_model,
+    create_graph, graph_analysis,
+)
+from ..tools.sql_tools import list_tables, describe_table
 
 logger = logging.getLogger(__name__)
+
+# 定义可用工具列表
+AVAILABLE_TOOLS = [
+    # SQL工具
+    execute_sql,
+    list_tables,
+    describe_table,
+    query_with_duckdb,
+    query_parquet,
+    # 数据分析工具
+    analyze_dataframe,
+    statistical_analysis,
+    analyze_large_dataset,
+    # 机器学习工具
+    train_model,
+    predict,
+    evaluate_model,
+    # 图分析工具
+    create_graph,
+    graph_analysis,
+]
 
 
 class DataAgent:
@@ -33,6 +63,11 @@ class DataAgent:
         """初始化Agent"""
         self.settings = get_settings()
         self.llm = create_zhipu_llm()
+        # 创建绑定工具的 LLM
+        self.tools = AVAILABLE_TOOLS
+        self.llm_with_tools = self.llm.bind_tools(self.tools)
+        # 创建工具节点
+        self.tool_node = ToolNode(self.tools)
         self.dag_generator = DAGGenerator()
         self.dag_executor = DAGExecutor()
         self.visualizer = DAGVisualizer()
@@ -44,6 +79,7 @@ class DataAgent:
 
         # 添加节点
         graph.add_node("conversation", self._conversation_node)
+        graph.add_node("tools", self._tool_node)  # 工具执行节点
         graph.add_node("planning", self._planning_node)
         graph.add_node("confirmation", self._confirmation_node)
         graph.add_node("execution", self._execution_node)
@@ -56,11 +92,15 @@ class DataAgent:
             "conversation",
             self._route_after_conversation,
             {
+                "tools": "tools",  # 需要调用工具
                 "continue": "conversation",
                 "plan": "planning",
                 "end": END,
             }
         )
+
+        # 工具执行后返回对话节点
+        graph.add_edge("tools", "conversation")
 
         graph.add_edge("planning", "confirmation")
 
@@ -82,20 +122,73 @@ class DataAgent:
         """
         对话节点
 
-        与用户进行多轮对话，理解需求。
+        与用户进行多轮对话，理解需求。使用绑定工具的 LLM，可以直接调用工具。
         """
         messages = state["messages"]
 
-        # 构建系统提示
-        system_msg = SystemMessage(content=f"{MAIN_AGENT_PROMPT}\n\n{CONVERSATION_PROMPT}")
+        # 构建系统提示，告知 LLM 可用的工具和数据库信息
+        db_info = f"""
+当前已配置的数据库: {self.settings.get_db_type()}
+数据库连接: 已就绪
 
-        # 调用LLM
-        response = self.llm.invoke([system_msg] + messages)
+你可以使用以下工具来查询数据库：
+- list_tables: 列出数据库中的所有表
+- describe_table: 获取表结构信息
+- execute_sql: 执行 SQL 查询（仅支持 SELECT）
+
+请直接调用工具来获取真实数据，不要编造数据。
+"""
+        system_msg = SystemMessage(content=f"{MAIN_AGENT_PROMPT}\n\n{CONVERSATION_PROMPT}\n\n{db_info}")
+
+        # 使用绑定工具的 LLM 调用
+        response = self.llm_with_tools.invoke([system_msg] + messages)
 
         return {
             "messages": [response],
             "iteration_count": state.get("iteration_count", 0) + 1,
         }
+
+    def _tool_node(self, state: AgentState) -> Dict[str, Any]:
+        """
+        工具执行节点
+
+        执行 LLM 请求的工具调用。
+        """
+        messages = state["messages"]
+        last_message = messages[-1]
+
+        # 检查是否有工具调用
+        if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
+            return {"messages": []}
+
+        # 执行每个工具调用
+        tool_messages = []
+        for tool_call in last_message.tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call["args"]
+            tool_id = tool_call["id"]
+
+            logger.info(f"执行工具: {tool_name}, 参数: {tool_args}")
+
+            # 查找并执行工具
+            tool_result = None
+            for tool in self.tools:
+                if tool.name == tool_name:
+                    try:
+                        tool_result = tool.invoke(tool_args)
+                    except Exception as e:
+                        tool_result = f"工具执行错误: {str(e)}"
+                    break
+
+            if tool_result is None:
+                tool_result = f"未找到工具: {tool_name}"
+
+            # 创建工具消息
+            tool_messages.append(
+                ToolMessage(content=str(tool_result), tool_call_id=tool_id)
+            )
+
+        return {"messages": tool_messages}
 
     def _planning_node(self, state: AgentState) -> Dict[str, Any]:
         """
@@ -224,7 +317,7 @@ class DataAgent:
     def _route_after_conversation(
         self,
         state: AgentState
-    ) -> Literal["continue", "plan", "end"]:
+    ) -> Literal["tools", "continue", "plan", "end"]:
         """
         对话后的路由决策
 
@@ -238,11 +331,19 @@ class DataAgent:
 
         # 检查是否是AI消息
         if isinstance(last_message, AIMessage):
+            # 检查是否有工具调用请求
+            if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+                return "tools"
+
             # 检查是否包含[READY_TO_PLAN]标记
             if "[READY_TO_PLAN]" in last_message.content:
                 return "plan"
             # AI已回复，结束本轮等待用户输入
             return "end"
+
+        # 检查是否是工具消息（工具执行完成后继续对话）
+        if isinstance(last_message, ToolMessage):
+            return "continue"
 
         # 检查用户消息
         if isinstance(last_message, HumanMessage):
