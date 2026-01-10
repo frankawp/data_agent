@@ -45,8 +45,13 @@ class Settings(BaseSettings):
         description="是否启用MicroSandbox沙箱"
     )
     sandbox_server_url: str = Field(
-        default="http://localhost:8080",
+        default="http://127.0.0.1:5555",
         description="MicroSandbox服务器地址"
+    )
+    sandbox_api_key: str = Field(
+        default="",
+        alias="SANDBOX_API_KEY",
+        description="MicroSandbox API密钥"
     )
     sandbox_timeout: int = Field(
         default=30,

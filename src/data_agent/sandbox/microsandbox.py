@@ -53,24 +53,6 @@ class DataAgentSandbox:
         self.settings = get_settings()
         self._sandbox = None
 
-    async def _get_sandbox(self):
-        """获取或创建沙箱实例"""
-        if self._sandbox is None:
-            try:
-                from microsandbox import PythonSandbox
-                self._sandbox = await PythonSandbox.create(
-                    name=self.name,
-                    # memory=self.memory,
-                    # cpus=self.cpus,
-                )
-            except ImportError:
-                logger.warning("MicroSandbox未安装，将使用本地执行模式")
-                self._sandbox = None
-            except Exception as e:
-                logger.warning(f"MicroSandbox初始化失败: {e}，将使用本地执行模式")
-                self._sandbox = None
-        return self._sandbox
-
     async def execute(self, code: str) -> ExecutionResult:
         """
         在沙箱中执行Python代码
@@ -88,23 +70,30 @@ class DataAgentSandbox:
             return await self._execute_local(code, start_time)
 
         try:
-            sandbox = await self._get_sandbox()
-            if sandbox is None:
-                return await self._execute_local(code, start_time)
+            from microsandbox import PythonSandbox
 
-            # 使用MicroSandbox执行
-            exec_result = await asyncio.wait_for(
-                sandbox.run(code),
-                timeout=self.timeout
-            )
-            output = await exec_result.output()
+            # 使用 async with 语法创建和管理沙箱
+            async with PythonSandbox.create(
+                name=self.name,
+                server_url=self.settings.sandbox_server_url or None,
+                api_key=self.settings.sandbox_api_key or None,
+            ) as sandbox:
+                # 执行代码
+                exec_result = await asyncio.wait_for(
+                    sandbox.run(code),
+                    timeout=self.timeout
+                )
+                output = await exec_result.output()
 
-            return ExecutionResult(
-                success=True,
-                output=output,
-                execution_time=time.time() - start_time
-            )
+                return ExecutionResult(
+                    success=True,
+                    output=output,
+                    execution_time=time.time() - start_time
+                )
 
+        except ImportError:
+            logger.warning("MicroSandbox未安装，将使用本地执行模式")
+            return await self._execute_local(code, start_time)
         except asyncio.TimeoutError:
             return ExecutionResult(
                 success=False,
@@ -113,7 +102,7 @@ class DataAgentSandbox:
                 execution_time=time.time() - start_time
             )
         except Exception as e:
-            logger.error(f"沙箱执行失败: {e}")
+            logger.warning(f"MicroSandbox执行失败: {e}，将使用本地执行模式")
             # 回退到本地执行
             return await self._execute_local(code, start_time)
 
@@ -139,6 +128,7 @@ class DataAgentSandbox:
         # 创建受限的全局命名空间
         restricted_globals = {
             "__builtins__": {
+                "__import__": __import__,  # 支持 import 语句
                 "print": print,
                 "len": len,
                 "range": range,
@@ -170,11 +160,14 @@ class DataAgentSandbox:
                 "TypeError": TypeError,
                 "KeyError": KeyError,
                 "IndexError": IndexError,
+                "AttributeError": AttributeError,
+                "RuntimeError": RuntimeError,
+                "StopIteration": StopIteration,
             },
             "__name__": "__main__",
         }
 
-        # 允许导入常用数据分析库
+        # 预加载常用数据分析库
         try:
             import pandas as pd
             import numpy as np
@@ -182,6 +175,21 @@ class DataAgentSandbox:
             restricted_globals["pandas"] = pd
             restricted_globals["np"] = np
             restricted_globals["numpy"] = np
+        except ImportError:
+            pass
+
+        try:
+            import scipy
+            from scipy import stats
+            restricted_globals["scipy"] = scipy
+            restricted_globals["stats"] = stats
+        except ImportError:
+            pass
+
+        try:
+            import sklearn
+            from sklearn import cluster, preprocessing, model_selection
+            restricted_globals["sklearn"] = sklearn
         except ImportError:
             pass
 

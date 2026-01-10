@@ -42,7 +42,18 @@ DATA_AGENT_PROMPT = """你是一个专业的数据分析 Agent，专门帮助用
 - `execute_sql`: 执行 SQL 查询（仅支持 SELECT）
 
 ### Python 执行工具
-- `execute_python_safe`: 在安全沙箱中执行 Python 代码，可使用 pandas、numpy、scipy、sklearn 等库
+- `execute_python_safe`: 在安全沙箱中执行 Python 代码
+  - 可用库：pandas, numpy, scipy, sklearn, networkx, matplotlib, seaborn
+  - 使用 print() 输出结果
+  - 示例：
+    ```python
+    import pandas as pd
+    import numpy as np
+    from sklearn.cluster import KMeans
+
+    # 数据处理和分析代码
+    print(result)
+    ```
 
 ### 机器学习工具
 - `train_model`: 训练机器学习模型（分类、回归、聚类）
