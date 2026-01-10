@@ -2,9 +2,13 @@
 SQL 工具
 
 支持 MySQL、PostgreSQL 数据库查询。
+支持 Safe Mode 和 Preview Limit 模式控制。
 """
 
 import logging
+import os
+from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 from langchain_core.tools import tool
@@ -12,8 +16,22 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..config.settings import get_settings
+from ..config.modes import get_mode_manager
 
 logger = logging.getLogger(__name__)
+
+
+def _auto_export(df: pd.DataFrame, query: str) -> str:
+    """自动导出查询结果到文件"""
+    export_dir = Path.home() / ".data_agent" / "exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"query_result_{timestamp}.csv"
+    filepath = export_dir / filename
+
+    df.to_csv(filepath, index=False, encoding="utf-8")
+    return str(filepath)
 
 
 @tool
@@ -22,7 +40,7 @@ def execute_sql(query: str, database: str = "default") -> str:
     执行SQL查询（MySQL/PostgreSQL）
 
     在配置的数据库上执行SQL查询，返回查询结果。
-    仅支持SELECT查询，不允许修改数据。
+    支持 Safe Mode 和 Preview Limit 模式控制。
 
     Args:
         query: SQL查询语句
@@ -32,17 +50,32 @@ def execute_sql(query: str, database: str = "default") -> str:
         查询结果的字符串表示
     """
     settings = get_settings()
+    mode_manager = get_mode_manager()
 
-    # 安全检查：只允许SELECT查询
+    # 获取模式设置
+    safe_mode = mode_manager.get("safe")
+    preview_limit = mode_manager.get("preview")
+    export_mode = mode_manager.get("export")
+
     query_upper = query.strip().upper()
-    if not query_upper.startswith("SELECT"):
-        return "错误：只允许执行SELECT查询"
 
-    # 检查危险关键字
-    dangerous_keywords = ["DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "TRUNCATE", "GRANT"]
-    for keyword in dangerous_keywords:
-        if keyword in query_upper:
-            return f"错误：查询包含不允许的关键字 {keyword}"
+    # 安全模式检查
+    if safe_mode:
+        # 严格模式：只允许 SELECT
+        if not query_upper.startswith("SELECT"):
+            return "错误：安全模式下只允许执行 SELECT 查询。使用 /safe off 关闭安全模式。"
+
+        # 检查所有危险关键字
+        dangerous_keywords = ["DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "TRUNCATE", "GRANT"]
+        for keyword in dangerous_keywords:
+            if keyword in query_upper:
+                return f"错误：安全模式下不允许使用 {keyword}。使用 /safe off 关闭安全模式。"
+    else:
+        # 非安全模式：仍然阻止最危险的操作
+        critical_keywords = ["DROP", "TRUNCATE", "GRANT"]
+        for keyword in critical_keywords:
+            if keyword in query_upper:
+                return f"错误：不允许执行 {keyword} 操作（此操作在任何模式下都被禁止）"
 
     try:
         engine = create_engine(settings.db_connection)
@@ -53,12 +86,26 @@ def execute_sql(query: str, database: str = "default") -> str:
             if df.empty:
                 return "查询结果为空"
 
-            # 限制返回行数
-            if len(df) > 1000:
-                df = df.head(1000)
-                return f"查询结果（显示前1000行，共{len(df)}行）:\n{df.to_string()}"
+            total_rows = len(df)
+            result_parts = []
 
-            return f"查询结果:\n{df.to_string()}"
+            # 应用预览限制
+            limit = preview_limit.to_int()
+            if limit and total_rows > limit:
+                df_display = df.head(limit)
+                result_parts.append(f"查询结果（显示前 {limit} 行，共 {total_rows} 行）:")
+            else:
+                df_display = df
+                result_parts.append(f"查询结果（共 {total_rows} 行）:")
+
+            result_parts.append(df_display.to_string())
+
+            # 自动导出
+            if export_mode:
+                export_path = _auto_export(df, query)
+                result_parts.append(f"\n[已导出至: {export_path}]")
+
+            return "\n".join(result_parts)
 
     except SQLAlchemyError as e:
         logger.error(f"SQL执行错误: {e}")

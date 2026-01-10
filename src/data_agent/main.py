@@ -1,7 +1,7 @@
 """
 CLI主入口
 
-基于rich库的命令行界面。
+基于rich库的命令行界面，支持模式切换和斜杠命令。
 """
 
 import sys
@@ -22,6 +22,8 @@ from rich.syntax import Syntax
 
 from .agent.deep_agent import DataAgent
 from .config.settings import get_settings
+from .config.modes import get_mode_manager
+from .commands import get_registry, register_all_commands
 
 # 配置日志 - 默认只显示警告级别，减少噪音
 logging.basicConfig(
@@ -38,14 +40,14 @@ logger = logging.getLogger(__name__)
 def print_welcome(console: Console):
     """打印欢迎信息"""
     welcome_text = """
-# 数据分析Agent
+# 数据分析 Agent
 
-欢迎使用数据分析Agent！我可以帮助您完成各种数据分析任务：
+欢迎使用数据分析 Agent！我可以帮助您完成各种数据分析任务：
 
-- **SQL查询**: 支持MySQL、PostgreSQL
-- **数据分析**: 使用pandas、numpy、scipy
-- **机器学习**: 使用scikit-learn
-- **图分析**: 使用networkx
+- **SQL查询**: 支持 MySQL、PostgreSQL
+- **数据分析**: 使用 pandas、numpy、scipy
+- **机器学习**: 使用 scikit-learn
+- **图分析**: 使用 networkx
 
 ## 使用说明
 
@@ -55,9 +57,11 @@ def print_welcome(console: Console):
 
 ## 常用命令
 
-- `help` - 显示帮助
-- `clear` - 清除对话历史
-- `config` - 显示配置信息
+输入 `/help` 查看所有可用命令，或使用：
+
+- `/modes` - 查看当前模式状态
+- `/plan on|off|auto` - 切换计划模式
+- `/safe on|off` - 切换安全模式
 - `exit` - 退出程序
 """
     console.print(Panel(Markdown(welcome_text), title="Data Agent", border_style="blue"))
@@ -385,6 +389,11 @@ def main():
     """主函数"""
     console = Console()
 
+    # 注册所有命令
+    register_all_commands()
+    registry = get_registry()
+    mode_manager = get_mode_manager()
+
     # 打印欢迎信息
     print_welcome(console)
 
@@ -392,12 +401,17 @@ def main():
     if not validate_config(console):
         console.print("\n[yellow]警告: 配置不完整，部分功能可能不可用。[/yellow]")
 
-    # 创建Agent
+    # 显示当前模式状态
+    console.print()
+    mode_manager.display_modes(console)
+
+    # 创建 Agent
+    agent = None
     try:
-        agent = DataAgent()
-        console.print("\n[green]Agent已就绪，请输入您的需求...[/green]\n")
+        agent = DataAgent(console=console)
+        console.print("\n[green]Agent 已就绪，请输入您的需求...[/green]\n")
     except Exception as e:
-        console.print(f"[red]Agent初始化失败: {e}[/red]")
+        console.print(f"[red]Agent 初始化失败: {e}[/red]")
         return 1
 
     # 主循环
@@ -409,21 +423,36 @@ def main():
             if not user_input.strip():
                 continue
 
-            # 处理命令
-            cmd = user_input.strip().lower()
+            # 处理斜杠命令
+            if user_input.strip().startswith("/"):
+                cmd_input = user_input.strip()
 
+                # 特殊处理需要访问 agent 的命令
+                if cmd_input.lower() == "/clear":
+                    agent.clear_history()
+                    console.print("[green]对话历史已清除。[/green]")
+                    continue
+                elif cmd_input.lower() == "/config":
+                    print_config(console)
+                    continue
+
+                # 使用命令注册表处理其他命令
+                registry.execute(cmd_input, console)
+                continue
+
+            # 处理退出命令（保持向后兼容）
+            cmd = user_input.strip().lower()
             if cmd in ["exit", "quit", "q", "退出"]:
                 console.print("[yellow]再见！[/yellow]")
                 break
 
-            elif cmd == "help":
-                print_help(console)
+            # 处理旧式命令（保持向后兼容）
+            if cmd == "help":
+                registry.show_help(console)
                 continue
-
             elif cmd == "config":
                 print_config(console)
                 continue
-
             elif cmd == "clear":
                 agent.clear_history()
                 console.print("[green]对话历史已清除。[/green]")
@@ -434,9 +463,9 @@ def main():
             step_count = [0]  # 使用列表以便在闭包中修改
 
             def on_thinking(content: str):
-                """显示思考内容"""
-                # 最终回复会在后面单独显示，这里显示中间思考
-                pass
+                """显示思考内容（verbose 模式下）"""
+                # verbose 模式的判断在 DataAgent 中处理
+                console.print(f"[dim]{content[:200]}...[/dim]" if len(content) > 200 else f"[dim]{content}[/dim]")
 
             def on_tool_call(tool_name: str, tool_args: dict):
                 """显示工具调用"""
