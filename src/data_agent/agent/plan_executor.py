@@ -56,7 +56,13 @@ class ExecutionPlan:
 
     def to_markdown(self) -> str:
         """转换为 Markdown 格式"""
-        lines = [f"## 任务目标\n{self.goal}\n", "## 执行步骤\n"]
+        lines = [
+            "## 任务目标",
+            self.goal,
+            "",
+            "## 执行步骤",
+            ""
+        ]
 
         status_icons = {
             StepStatus.PENDING: "○",
@@ -71,9 +77,11 @@ class ExecutionPlan:
             lines.append(f"{icon} **步骤 {step.index}**: {step.description}")
             if step.tool_hint:
                 lines.append(f"   _工具: {step.tool_hint}_")
+            lines.append("")  # 步骤之间添加空行
 
         if self.estimated_tools:
-            lines.append(f"\n## 预计使用工具\n{', '.join(self.estimated_tools)}")
+            lines.append("## 预计使用工具")
+            lines.append(", ".join(self.estimated_tools))
 
         return "\n".join(lines)
 

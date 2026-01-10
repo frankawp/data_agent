@@ -7,7 +7,6 @@ DeepAgent 数据分析实现
 from typing import Optional, Callable
 
 from deepagents import create_deep_agent
-from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
 from rich.console import Console
@@ -16,17 +15,19 @@ from rich.prompt import Confirm
 from ..config.settings import get_settings
 from ..config.modes import get_mode_manager, PlanModeValue
 from .plan_executor import PlanExecutor, StepStatus
+from .llm import create_llm
+from .compactor import ConversationCompactor
 from ..tools import (
     execute_sql,
     list_tables,
     describe_table,
-    analyze_dataframe,
-    statistical_analysis,
+    execute_python_safe,
     train_model,
     predict,
-    evaluate_model,
+    list_models,
     create_graph,
     graph_analysis,
+    list_graphs,
 )
 
 
@@ -38,33 +39,35 @@ DATA_AGENT_PROMPT = """你是一个专业的数据分析 Agent，专门帮助用
 ### SQL 数据库工具
 - `list_tables`: 列出数据库中的所有表
 - `describe_table`: 获取指定表的结构信息
-- `execute_sql`: 执行 SQL 查询（仅支持 SELECT，自动防止危险操作）
+- `execute_sql`: 执行 SQL 查询（仅支持 SELECT）
 
-### 数据分析工具
-- `analyze_dataframe`: 分析 DataFrame 的基本统计信息
-- `statistical_analysis`: 执行统计分析（正态性检验、相关性、t检验等）
+### Python 执行工具
+- `execute_python_safe`: 在安全沙箱中执行 Python 代码，可使用 pandas、numpy、scipy、sklearn 等库
 
 ### 机器学习工具
-- `train_model`: 训练机器学习模型（支持分类、回归、聚类）
+- `train_model`: 训练机器学习模型（分类、回归、聚类）
 - `predict`: 使用训练好的模型进行预测
-- `evaluate_model`: 评估模型性能
+- `list_models`: 列出所有已训练的模型
 
 ### 图分析工具
 - `create_graph`: 创建图结构
-- `graph_analysis`: 执行图算法分析
+- `graph_analysis`: 执行图算法分析（中心性、社区发现、PageRank 等）
+- `list_graphs`: 列出所有已创建的图
 
 ## 工作流程
 
 1. **理解需求**: 仔细理解用户的数据分析需求
-2. **规划任务**: 将复杂任务分解为步骤
-3. **执行查询**: 调用相应工具获取和分析数据
-4. **汇总结果**: 将分析结果以清晰的格式呈现给用户
+2. **获取数据**: 使用 SQL 工具查询数据库获取数据
+3. **分析数据**: 使用 `execute_python_safe` 执行 Python 代码进行数据分析
+4. **高级分析**: 需要时使用机器学习或图分析工具
+5. **汇总结果**: 将分析结果清晰呈现给用户
 
 ## 重要提示
 
-- 请直接调用工具获取真实数据，不要编造数据
+- 获取数据后，**务必使用 `execute_python_safe` 进行数据分析**
+- Python 代码中可以使用 pandas、numpy、scipy、sklearn 等库
+- 分析结果通过 print() 输出
 - 对于复杂任务，先规划步骤再执行
-- SQL 查询仅支持 SELECT，自动阻止危险操作
 """
 
 
@@ -76,25 +79,18 @@ def create_data_agent(
     创建数据分析 DeepAgent
 
     Args:
-        model: 模型名称，默认使用智谱 AI glm-4
+        model: 模型名称，默认使用配置中的模型
         system_prompt: 自定义系统提示，默认使用数据分析专用提示
 
     Returns:
         CompiledStateGraph: 编译后的 Agent 图
     """
-    settings = get_settings()
-
     # 初始化模型
     if model is None:
-        # 使用智谱 AI 模型
-        llm = init_chat_model(
-            model=settings.zhipu_model,
-            model_provider="openai",
-            api_key=settings.zhipu_api_key,
-            base_url=settings.zhipu_base_url,
-        )
+        # 使用配置中的模型
+        llm = create_llm()
     elif isinstance(model, str):
-        llm = init_chat_model(model)
+        llm = create_llm(model=model)
     else:
         llm = model
 
@@ -104,16 +100,16 @@ def create_data_agent(
         execute_sql,
         list_tables,
         describe_table,
-        # 数据分析工具
-        analyze_dataframe,
-        statistical_analysis,
+        # Python 执行工具
+        execute_python_safe,
         # 机器学习工具
         train_model,
         predict,
-        evaluate_model,
+        list_models,
         # 图分析工具
         create_graph,
         graph_analysis,
+        list_graphs,
     ]
 
     # 创建 DeepAgent
@@ -148,6 +144,47 @@ class DataAgent:
         self._console = console or Console()
         self._plan_executor = PlanExecutor(self._console)
         self._pending_tool_confirmation = None  # 待确认的工具调用
+        self._compactor = ConversationCompactor(create_llm())  # 对话压缩器
+
+    def _prepare_messages(self, messages: list) -> list:
+        """
+        准备发送给 Agent 的消息
+
+        当 token 使用率超过阈值时，执行 compact 操作。
+
+        Args:
+            messages: 原始消息列表
+
+        Returns:
+            处理后的消息列表（可能已压缩）
+        """
+        settings = get_settings()
+        max_tokens = settings.max_context_tokens
+        threshold = settings.compact_threshold
+        keep_ratio = settings.compact_keep_ratio
+
+        if not self._compactor.should_compact(messages, max_tokens, threshold):
+            return messages
+
+        # 计算压缩前的 token 数
+        before_tokens = self._compactor.count_tokens(messages)
+
+        # 执行 compact
+        compacted = self._compactor.compact(messages, max_tokens, keep_ratio)
+
+        # 计算压缩后的 token 数
+        after_tokens = self._compactor.count_tokens(compacted)
+
+        # 打印提示
+        if self._console:
+            usage_before = before_tokens / max_tokens * 100
+            usage_after = after_tokens / max_tokens * 100
+            self._console.print(
+                f"[dim]对话历史已压缩: {before_tokens:,} → {after_tokens:,} tokens "
+                f"({usage_before:.1f}% → {usage_after:.1f}%)[/dim]"
+            )
+
+        return compacted
 
     def chat(self, user_input: str) -> str:
         """
@@ -162,8 +199,11 @@ class DataAgent:
         # 构建消息
         self._messages.append({"role": "user", "content": user_input})
 
+        # 准备消息（可能触发 compact）
+        messages_to_send = self._prepare_messages(self._messages)
+
         # 调用 Agent
-        result = self.agent.invoke({"messages": self._messages})
+        result = self.agent.invoke({"messages": messages_to_send})
 
         # 获取响应
         messages = result.get("messages", [])
@@ -343,19 +383,22 @@ class DataAgent:
         # 构建消息
         self._messages.append({"role": "user", "content": user_input})
 
+        # 准备消息（可能触发 compact）
+        messages_to_send = self._prepare_messages(self._messages)
+
         final_response = ""
         tool_calls_pending = {}  # 记录待处理的工具调用
-        collected_messages = list(self._messages)  # 收集流式处理中的消息
+        collected_messages = list(messages_to_send)  # 收集流式处理中的消息
         processed_msg_ids = set()  # 跟踪已处理的消息 ID，避免重复处理历史消息
 
         # 记录已存在的消息 ID（历史消息）
-        for msg in self._messages:
+        for msg in messages_to_send:
             msg_id = getattr(msg, "id", None)
             if msg_id:
                 processed_msg_ids.add(msg_id)
 
         # 流式调用 Agent
-        for event in self.agent.stream({"messages": self._messages}):
+        for event in self.agent.stream({"messages": messages_to_send}):
             for node_name, node_output in event.items():
                 # 跳过中间件事件（None 值或非 dict）
                 if node_output is None:

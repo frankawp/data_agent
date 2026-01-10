@@ -2,25 +2,22 @@
 
 from .sql_tools import execute_sql, list_tables, describe_table
 from .python_tools import execute_python_safe
-from .data_tools import analyze_dataframe, statistical_analysis
-from .ml_tools import train_model, predict, evaluate_model
-from .graph_tools import create_graph, graph_analysis
+from .ml_tools import train_model, predict, list_models
+from .graph_tools import create_graph, graph_analysis, list_graphs
 
 __all__ = [
-    # SQL工具
+    # SQL 工具
     "execute_sql",
     "list_tables",
     "describe_table",
-    # Python工具
+    # Python 工具
     "execute_python_safe",
-    # 数据分析工具
-    "analyze_dataframe",
-    "statistical_analysis",
     # 机器学习工具
     "train_model",
     "predict",
-    "evaluate_model",
+    "list_models",
     # 图分析工具
     "create_graph",
     "graph_analysis",
+    "list_graphs",
 ]

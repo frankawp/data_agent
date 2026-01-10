@@ -15,21 +15,21 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """应用配置"""
 
-    # 智谱AI配置
-    zhipu_api_key: str = Field(
+    # 模型配置（支持所有 OpenAI API 兼容的模型）
+    api_key: str = Field(
         default="",
         alias="API_KEY",
-        description="智谱AI API密钥"
+        description="模型 API 密钥"
     )
-    zhipu_base_url: str = Field(
-        default="https://open.bigmodel.cn/api/paas/v4/",
+    base_url: str = Field(
+        default="https://api.deepseek.com",
         alias="BASE_URL",
-        description="智谱AI API基础URL"
+        description="模型 API 基础 URL"
     )
-    zhipu_model: str = Field(
-        default="glm-4.7",
+    model: str = Field(
+        default="deepseek-chat",
         alias="MODEL",
-        description="智谱AI模型名称"
+        description="模型名称"
     )
 
     # 数据库配置
@@ -62,9 +62,22 @@ class Settings(BaseSettings):
         default=10,
         description="Agent最大迭代次数"
     )
-    conversation_memory_size: int = Field(
-        default=20,
-        description="对话历史记录数量"
+
+    # Compact 配置（基于 token 百分比）
+    max_context_tokens: int = Field(
+        default=64000,
+        alias="MAX_CONTEXT_TOKENS",
+        description="模型最大上下文窗口 (tokens)"
+    )
+    compact_threshold: float = Field(
+        default=0.8,
+        alias="COMPACT_THRESHOLD",
+        description="触发 compact 的 token 使用率阈值 (0.0-1.0)"
+    )
+    compact_keep_ratio: float = Field(
+        default=0.1,
+        alias="COMPACT_KEEP_RATIO",
+        description="compact 后保留的最近消息 token 比例 (0.0-1.0)"
     )
 
     # 日志配置
@@ -86,8 +99,8 @@ class Settings(BaseSettings):
         """验证配置，返回错误列表"""
         errors = []
 
-        if not self.zhipu_api_key:
-            errors.append("缺少智谱AI API密钥 (API_KEY)")
+        if not self.api_key:
+            errors.append("缺少模型 API 密钥 (API_KEY)")
 
         if not self.db_connection:
             errors.append("缺少数据库连接字符串 (DB_CONNECTION)")

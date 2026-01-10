@@ -43,16 +43,15 @@ class TestToolsImport:
 
     def test_import_data_tools(self):
         """测试数据分析工具导入"""
-        from data_agent.tools import (
-            analyze_dataframe,
-            statistical_analysis,
-        )
-        assert analyze_dataframe is not None
+        from data_agent.tools import execute_python_safe
+        assert execute_python_safe is not None
 
     def test_import_ml_tools(self):
         """测试机器学习工具导入"""
-        from data_agent.tools import train_model, predict, evaluate_model
+        from data_agent.tools import train_model, predict, list_models
         assert train_model is not None
+        assert predict is not None
+        assert list_models is not None
 
     def test_import_graph_tools(self):
         """测试图分析工具导入"""
@@ -135,8 +134,13 @@ class TestConfigImport:
 
         settings = get_settings()
         assert settings is not None
-        assert hasattr(settings, "zhipu_model")
-        assert hasattr(settings, "zhipu_api_key")
+        assert hasattr(settings, "model")
+        assert hasattr(settings, "api_key")
+        assert hasattr(settings, "base_url")
+        # Compact 配置（基于 token 百分比）
+        assert hasattr(settings, "max_context_tokens")
+        assert hasattr(settings, "compact_threshold")
+        assert hasattr(settings, "compact_keep_ratio")
 
     def test_import_prompts(self):
         """测试提示模板导入"""
