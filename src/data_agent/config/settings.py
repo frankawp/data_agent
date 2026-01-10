@@ -57,16 +57,6 @@ class Settings(BaseSettings):
         description="沙箱内存限制（MB）"
     )
 
-    # DuckDB配置
-    duckdb_memory_limit: str = Field(
-        default="4GB",
-        description="DuckDB内存限制"
-    )
-    duckdb_threads: int = Field(
-        default=4,
-        description="DuckDB线程数"
-    )
-
     # Agent配置
     max_iterations: int = Field(
         default=10,

@@ -186,12 +186,6 @@ class DataAgentSandbox:
             pass
 
         try:
-            import duckdb
-            restricted_globals["duckdb"] = duckdb
-        except ImportError:
-            pass
-
-        try:
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                 exec(code, restricted_globals)
 

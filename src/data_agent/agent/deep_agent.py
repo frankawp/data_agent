@@ -14,18 +14,16 @@ from langgraph.graph.state import CompiledStateGraph
 from ..config.settings import get_settings
 from ..tools import (
     execute_sql,
-    query_with_duckdb,
-    query_parquet,
+    list_tables,
+    describe_table,
     analyze_dataframe,
     statistical_analysis,
-    analyze_large_dataset,
     train_model,
     predict,
     evaluate_model,
     create_graph,
     graph_analysis,
 )
-from ..tools.sql_tools import list_tables, describe_table
 
 
 # 数据分析专用系统提示
@@ -37,13 +35,10 @@ DATA_AGENT_PROMPT = """你是一个专业的数据分析 Agent，专门帮助用
 - `list_tables`: 列出数据库中的所有表
 - `describe_table`: 获取指定表的结构信息
 - `execute_sql`: 执行 SQL 查询（仅支持 SELECT，自动防止危险操作）
-- `query_with_duckdb`: 使用 DuckDB 执行高性能分析查询
-- `query_parquet`: 直接查询 Parquet 文件
 
 ### 数据分析工具
 - `analyze_dataframe`: 分析 DataFrame 的基本统计信息
 - `statistical_analysis`: 执行统计分析（正态性检验、相关性、t检验等）
-- `analyze_large_dataset`: 使用 DuckDB 分析大数据集
 
 ### 机器学习工具
 - `train_model`: 训练机器学习模型（支持分类、回归、聚类）
@@ -57,7 +52,7 @@ DATA_AGENT_PROMPT = """你是一个专业的数据分析 Agent，专门帮助用
 ## 工作流程
 
 1. **理解需求**: 仔细理解用户的数据分析需求
-2. **规划任务**: 使用 write_todos 工具将复杂任务分解为步骤
+2. **规划任务**: 将复杂任务分解为步骤
 3. **执行查询**: 调用相应工具获取和分析数据
 4. **汇总结果**: 将分析结果以清晰的格式呈现给用户
 
@@ -65,7 +60,6 @@ DATA_AGENT_PROMPT = """你是一个专业的数据分析 Agent，专门帮助用
 
 - 请直接调用工具获取真实数据，不要编造数据
 - 对于复杂任务，先规划步骤再执行
-- 查询结果过长时会自动保存到文件，可用 read_file 查看
 - SQL 查询仅支持 SELECT，自动阻止危险操作
 """
 
@@ -106,12 +100,9 @@ def create_data_agent(
         execute_sql,
         list_tables,
         describe_table,
-        query_with_duckdb,
-        query_parquet,
         # 数据分析工具
         analyze_dataframe,
         statistical_analysis,
-        analyze_large_dataset,
         # 机器学习工具
         train_model,
         predict,

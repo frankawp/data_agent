@@ -42,7 +42,7 @@ def print_welcome(console: Console):
 
 欢迎使用数据分析Agent！我可以帮助您完成各种数据分析任务：
 
-- **SQL查询**: 支持MySQL、PostgreSQL、DuckDB
+- **SQL查询**: 支持MySQL、PostgreSQL
 - **数据分析**: 使用pandas、numpy、scipy
 - **机器学习**: 使用scikit-learn
 - **图分析**: 使用networkx
@@ -89,7 +89,6 @@ def print_config(console: Console):
     config_table.add_row("API地址", settings.zhipu_base_url)
     config_table.add_row("数据库类型", settings.get_db_type())
     config_table.add_row("沙箱启用", "是" if settings.sandbox_enabled else "否")
-    config_table.add_row("DuckDB内存限制", settings.duckdb_memory_limit)
     config_table.add_row("最大迭代次数", str(settings.max_iterations))
 
     console.print(config_table)
@@ -322,7 +321,7 @@ def format_tool_result(tool_name: str, result: str, console: Console) -> None:
         return
 
     # SQL 查询结果
-    if tool_name in ["execute_sql", "query_with_duckdb", "query_parquet"]:
+    if tool_name == "execute_sql":
         format_sql_result(result, console)
         return
 
@@ -356,7 +355,7 @@ def format_tool_args_display(tool_name: str, args: dict, console: Console) -> No
         return
 
     # SQL 查询特殊处理
-    if "query" in args and tool_name in ["execute_sql", "query_with_duckdb", "query_parquet"]:
+    if "query" in args and tool_name == "execute_sql":
         format_sql_query(args["query"], console)
         # 显示其他参数
         other_args = {k: v for k, v in args.items() if k != "query"}

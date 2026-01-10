@@ -36,8 +36,6 @@ class TestToolsImport:
             execute_sql,
             list_tables,
             describe_table,
-            query_with_duckdb,
-            query_parquet,
         )
         assert execute_sql is not None
         assert list_tables is not None
@@ -48,7 +46,6 @@ class TestToolsImport:
         from data_agent.tools import (
             analyze_dataframe,
             statistical_analysis,
-            analyze_large_dataset,
         )
         assert analyze_dataframe is not None
 

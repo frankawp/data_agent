@@ -20,7 +20,7 @@ def execute_python_safe(code: str, timeout: int = 30) -> str:
     """
     在安全沙箱中执行Python代码
 
-    代码将在隔离的环境中执行，可以使用pandas、numpy、duckdb等
+    代码将在隔离的环境中执行，可以使用pandas、numpy、scipy等
     数据分析库。执行结果通过print输出。
 
     Args:

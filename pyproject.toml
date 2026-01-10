@@ -36,7 +36,6 @@ dependencies = [
     # 数据库
     "sqlalchemy>=2.0.0",
     "pymysql>=1.1.0",
-    "duckdb>=1.0.0",
 
     # 数据分析
     "pandas>=2.0.0",

@@ -8,7 +8,6 @@ import json
 import logging
 from typing import List, Optional, Any
 
-import duckdb
 import numpy as np
 import pandas as pd
 from langchain_core.tools import tool
@@ -167,88 +166,6 @@ def statistical_analysis(data_json: str, method: str, column: Optional[str] = No
     except Exception as e:
         logger.error(f"统计分析错误: {e}")
         return f"统计分析失败: {str(e)}"
-
-
-@tool
-def analyze_large_dataset(file_path: str, analysis_type: str) -> str:
-    """
-    使用DuckDB分析大型数据集
-
-    无需将数据加载到内存，直接分析大文件。
-    支持CSV、Parquet、JSON格式。
-
-    Args:
-        file_path: 数据文件路径
-        analysis_type: 分析类型，支持:
-                      - summary: 数据概览
-                      - describe: 描述性统计
-                      - sample: 随机抽样
-                      - schema: 数据结构
-
-    Returns:
-        分析结果
-
-    示例:
-        analyze_large_dataset("data/sales.parquet", "summary")
-    """
-    analysis_type = analysis_type.lower()
-
-    # 根据文件类型选择读取函数
-    if file_path.endswith(".parquet"):
-        read_func = f"read_parquet('{file_path}')"
-    elif file_path.endswith(".csv"):
-        read_func = f"read_csv_auto('{file_path}')"
-    elif file_path.endswith(".json"):
-        read_func = f"read_json_auto('{file_path}')"
-    else:
-        return f"不支持的文件格式: {file_path}"
-
-    try:
-        if analysis_type == "summary":
-            # 获取行数和列信息
-            count_sql = f"SELECT COUNT(*) as row_count FROM {read_func}"
-            row_count = duckdb.sql(count_sql).fetchone()[0]
-
-            schema_sql = f"DESCRIBE SELECT * FROM {read_func}"
-            schema = duckdb.sql(schema_sql).df()
-
-            result = f"数据概览:\n"
-            result += f"文件: {file_path}\n"
-            result += f"行数: {row_count:,}\n"
-            result += f"列数: {len(schema)}\n"
-            result += f"\n列信息:\n{schema.to_string()}"
-            return result
-
-        elif analysis_type == "describe":
-            # 数值列的描述性统计
-            sql = f"""
-                SELECT
-                    COUNT(*) as count,
-                    AVG(CAST(column0 AS DOUBLE)) as mean
-                FROM {read_func}
-            """
-            # 使用DuckDB的summarize功能
-            summarize_sql = f"SUMMARIZE SELECT * FROM {read_func}"
-            result = duckdb.sql(summarize_sql).df()
-            return f"描述性统计:\n{result.to_string()}"
-
-        elif analysis_type == "sample":
-            # 随机抽样10行
-            sql = f"SELECT * FROM {read_func} USING SAMPLE 10"
-            result = duckdb.sql(sql).df()
-            return f"随机抽样 (10行):\n{result.to_string()}"
-
-        elif analysis_type == "schema":
-            sql = f"DESCRIBE SELECT * FROM {read_func}"
-            result = duckdb.sql(sql).df()
-            return f"数据结构:\n{result.to_string()}"
-
-        else:
-            return f"未知的分析类型: {analysis_type}"
-
-    except Exception as e:
-        logger.error(f"大数据分析错误: {e}")
-        return f"分析失败: {str(e)}"
 
 
 @tool
