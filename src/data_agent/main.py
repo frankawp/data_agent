@@ -409,6 +409,8 @@ def main():
     agent = None
     try:
         agent = DataAgent(console=console)
+        console.print(f"\n[dim]会话 ID: {agent.session_id}[/dim]")
+        console.print(f"[dim]导出目录: {agent.export_dir}[/dim]")
         console.print("\n[green]Agent 已就绪，请输入您的需求...[/green]\n")
     except Exception as e:
         console.print(f"[red]Agent 初始化失败: {e}[/red]")

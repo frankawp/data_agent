@@ -32,6 +32,17 @@ class Settings(BaseSettings):
         description="模型名称"
     )
 
+    # 兼容旧配置（向后兼容）
+    @property
+    def zhipu_model(self) -> str:
+        """兼容旧版配置名称"""
+        return self.model
+
+    @property
+    def zhipu_base_url(self) -> str:
+        """兼容旧版配置名称"""
+        return self.base_url
+
     # 数据库配置
     db_connection: str = Field(
         default="",

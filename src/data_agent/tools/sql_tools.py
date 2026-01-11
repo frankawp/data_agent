@@ -17,14 +17,25 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ..config.settings import get_settings
 from ..config.modes import get_mode_manager
+from ..session import get_current_session
 
 logger = logging.getLogger(__name__)
 
 
-def _auto_export(df: pd.DataFrame, query: str) -> str:
-    """自动导出查询结果到文件"""
+def _get_export_dir() -> Path:
+    """获取导出目录，优先使用当前会话目录"""
+    session = get_current_session()
+    if session:
+        return session.export_dir
+    # 回退到默认目录
     export_dir = Path.home() / ".data_agent" / "exports"
     export_dir.mkdir(parents=True, exist_ok=True)
+    return export_dir
+
+
+def _auto_export(df: pd.DataFrame, query: str) -> str:
+    """自动导出查询结果到文件（使用会话目录）"""
+    export_dir = _get_export_dir()
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"query_result_{timestamp}.csv"

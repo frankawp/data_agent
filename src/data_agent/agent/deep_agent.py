@@ -2,6 +2,7 @@
 DeepAgent 数据分析实现
 
 基于 DeepAgents 框架构建的数据分析 Agent。
+支持会话隔离，每个会话拥有独立的沙箱和导出目录。
 """
 
 from typing import Optional, Callable
@@ -14,6 +15,7 @@ from rich.prompt import Confirm
 
 from ..config.settings import get_settings
 from ..config.modes import get_mode_manager, PlanModeValue
+from ..session import SessionManager
 from .plan_executor import PlanExecutor, StepStatus
 from .llm import create_llm
 from .compactor import ConversationCompactor
@@ -139,16 +141,26 @@ class DataAgent:
 
     提供更简洁的接口来使用 DeepAgent。
     支持运行时模式切换（Plan Mode、Auto Execute 等）。
+    支持会话隔离，每个会话拥有独立的沙箱和导出目录。
     """
 
-    def __init__(self, model: Optional[str] = None, console: Optional[Console] = None):
+    def __init__(
+        self,
+        model: Optional[str] = None,
+        console: Optional[Console] = None,
+        session_id: Optional[str] = None,
+    ):
         """
         初始化数据分析 Agent
 
         Args:
             model: 模型名称，默认使用配置中的模型
             console: Rich Console 实例，用于 Plan Mode 交互
+            session_id: 会话 ID，不提供则自动生成
         """
+        # 创建会话管理器（会话隔离的关键）
+        self._session = SessionManager(session_id=session_id)
+
         self.agent = create_data_agent(model=model)
         self._messages = []
         self._mode_manager = get_mode_manager()
@@ -499,3 +511,22 @@ class DataAgent:
             dict: Agent 输出
         """
         return await self.agent.ainvoke(input_dict)
+
+    @property
+    def session(self) -> SessionManager:
+        """获取当前会话管理器"""
+        return self._session
+
+    @property
+    def session_id(self) -> str:
+        """获取当前会话 ID"""
+        return self._session.session_id
+
+    @property
+    def export_dir(self):
+        """获取当前会话的导出目录"""
+        return self._session.export_dir
+
+    def list_exports(self) -> list:
+        """列出当前会话的所有导出文件"""
+        return self._session.list_exports()

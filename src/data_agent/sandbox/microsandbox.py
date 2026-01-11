@@ -1,15 +1,17 @@
 """
 MicroSandbox安全沙箱封装
 
-提供安全的Python代码执行环境。
+提供安全的Python代码执行环境，支持会话隔离。
 """
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
 from ..config.settings import get_settings
+from ..session import get_current_session
 
 logger = logging.getLogger(__name__)
 
@@ -28,30 +30,54 @@ class DataAgentSandbox:
     数据分析Agent的安全沙箱
 
     使用MicroSandbox提供硬件级别的代码隔离执行环境。
+    支持会话隔离，每个会话使用独立的沙箱实例。
     """
 
     def __init__(
         self,
-        name: str = "data_agent",
+        name: Optional[str] = None,
         memory: int = 2048,
         cpus: int = 2,
         timeout: int = 30,
+        session_id: Optional[str] = None,
     ):
         """
         初始化沙箱
 
         Args:
-            name: 沙箱名称
+            name: 沙箱名称，不提供则从当前会话生成
             memory: 内存限制（MB）
             cpus: CPU核心数
             timeout: 执行超时时间（秒）
+            session_id: 会话 ID，用于隔离
         """
-        self.name = name
+        # 获取当前会话
+        session = get_current_session()
+
+        # 确定沙箱名称（优先使用会话名称）
+        if name:
+            self.name = name
+        elif session:
+            self.name = session.get_sandbox_name()
+        else:
+            self.name = f"sandbox_{session_id}" if session_id else "data_agent"
+
         self.memory = memory
         self.cpus = cpus
         self.timeout = timeout
         self.settings = get_settings()
         self._sandbox = None
+        self._session = session
+
+        # 设置导出目录（用于 volume 挂载）
+        if session:
+            self.export_dir = session.export_dir
+            self.workspace_dir = session.workspace_dir
+        else:
+            self.export_dir = Path.home() / ".data_agent" / "exports"
+            self.workspace_dir = Path.home() / ".data_agent" / "workspace"
+            self.export_dir.mkdir(parents=True, exist_ok=True)
+            self.workspace_dir.mkdir(parents=True, exist_ok=True)
 
     async def execute(self, code: str) -> ExecutionResult:
         """
@@ -72,7 +98,10 @@ class DataAgentSandbox:
         try:
             from microsandbox import PythonSandbox
 
+            logger.debug(f"创建沙箱: {self.name}, 导出目录: {self.export_dir}")
+
             # 使用 async with 语法创建和管理沙箱
+            # 沙箱名称使用会话唯一名称，实现会话隔离
             async with PythonSandbox.create(
                 name=self.name,
                 server_url=self.settings.sandbox_server_url or None,
@@ -241,6 +270,18 @@ class DataAgentSandbox:
 
         full_code = "\n".join(data_setup) + "\n" + code
         return await self.execute(full_code)
+
+    def get_export_path(self, filename: str) -> Path:
+        """
+        获取导出文件的完整路径
+
+        Args:
+            filename: 文件名
+
+        Returns:
+            完整的文件路径
+        """
+        return self.export_dir / filename
 
     async def close(self):
         """关闭沙箱"""
