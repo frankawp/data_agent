@@ -92,7 +92,12 @@ class DataAgentSandbox:
         import time
         start_time = time.time()
 
+        # 检查配置是否禁用沙箱
         if not self.settings.sandbox_enabled:
+            return await self._execute_local(code, start_time)
+
+        # 检查会话中沙箱是否已标记为不可用（避免重复尝试连接）
+        if self._session and not self._session.is_sandbox_available():
             return await self._execute_local(code, start_time)
 
         try:
@@ -122,6 +127,9 @@ class DataAgentSandbox:
 
         except ImportError:
             logger.warning("MicroSandbox未安装，将使用本地执行模式")
+            # 标记沙箱为不可用，后续不再重试
+            if self._session:
+                self._session.mark_sandbox_unavailable("MicroSandbox 未安装")
             return await self._execute_local(code, start_time)
         except asyncio.TimeoutError:
             return ExecutionResult(
@@ -132,7 +140,9 @@ class DataAgentSandbox:
             )
         except Exception as e:
             logger.warning(f"MicroSandbox执行失败: {e}，将使用本地执行模式")
-            # 回退到本地执行
+            # 标记沙箱为不可用，后续不再重试
+            if self._session:
+                self._session.mark_sandbox_unavailable(str(e))
             return await self._execute_local(code, start_time)
 
     async def _execute_local(self, code: str, start_time: float) -> ExecutionResult:

@@ -53,6 +53,10 @@ class SessionManager:
         self.export_dir = self.session_dir / "exports"
         self.workspace_dir = self.session_dir / "workspace"
 
+        # 沙箱可用状态（会话级别）
+        self._sandbox_unavailable = False
+        self._sandbox_error: Optional[str] = None
+
         # 创建会话目录
         self._create_session_dirs()
 
@@ -128,6 +132,37 @@ class SessionManager:
             唯一的沙箱名称
         """
         return f"sandbox_{self.session_id}"
+
+    def mark_sandbox_unavailable(self, error: str) -> None:
+        """
+        标记沙箱在本会话中不可用
+
+        一旦标记，后续执行将直接使用本地模式，不再尝试连接沙箱。
+
+        Args:
+            error: 错误信息
+        """
+        self._sandbox_unavailable = True
+        self._sandbox_error = error
+        logger.info(f"沙箱已标记为不可用，后续将使用本地执行模式。原因: {error}")
+
+    def is_sandbox_available(self) -> bool:
+        """
+        检查沙箱是否可用
+
+        Returns:
+            True 表示可用（可以尝试连接），False 表示不可用
+        """
+        return not self._sandbox_unavailable
+
+    def get_sandbox_error(self) -> Optional[str]:
+        """
+        获取沙箱不可用的错误信息
+
+        Returns:
+            错误信息，如果沙箱可用则返回 None
+        """
+        return self._sandbox_error
 
     def get_export_path(self, filename: str) -> Path:
         """

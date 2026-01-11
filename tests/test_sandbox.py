@@ -311,5 +311,114 @@ class TestSandboxSessionIntegration:
         shutil.rmtree(session.session_dir)
 
 
+class TestSandboxUnavailableFlag:
+    """测试沙箱不可用标记功能"""
+
+    def test_session_sandbox_available_by_default(self):
+        """测试会话默认沙箱可用"""
+        from data_agent.session import SessionManager
+
+        session = SessionManager()
+        assert session.is_sandbox_available() is True
+        assert session.get_sandbox_error() is None
+
+        # 清理
+        shutil.rmtree(session.session_dir)
+
+    def test_mark_sandbox_unavailable(self):
+        """测试标记沙箱不可用"""
+        from data_agent.session import SessionManager
+
+        session = SessionManager()
+        session.mark_sandbox_unavailable("Connection refused")
+
+        assert session.is_sandbox_available() is False
+        assert session.get_sandbox_error() == "Connection refused"
+
+        # 清理
+        shutil.rmtree(session.session_dir)
+
+    @pytest.mark.asyncio
+    async def test_sandbox_skips_retry_after_failure(self):
+        """测试沙箱失败后跳过重试"""
+        from data_agent.sandbox import DataAgentSandbox
+        from data_agent.session import SessionManager
+        import sys
+
+        session = SessionManager()
+
+        # 模拟沙箱连接失败
+        with patch('data_agent.sandbox.microsandbox.get_settings') as mock_settings:
+            mock_settings.return_value = MagicMock(
+                sandbox_enabled=True,
+                sandbox_server_url="http://127.0.0.1:5555",
+                sandbox_api_key=None
+            )
+
+            # 第一次执行 - 会尝试连接沙箱并失败
+            sandbox1 = DataAgentSandbox(timeout=5)
+
+            # 模拟 microsandbox 模块不存在
+            # 先保存原有状态（如果有的话）
+            original_module = sys.modules.get('microsandbox')
+            sys.modules['microsandbox'] = None  # 模拟模块不存在
+
+            try:
+                result1 = await sandbox1.execute("print('test1')")
+            finally:
+                # 恢复原状态
+                if original_module is not None:
+                    sys.modules['microsandbox'] = original_module
+                elif 'microsandbox' in sys.modules:
+                    del sys.modules['microsandbox']
+
+            # 验证第一次执行成功（通过本地模式）
+            assert result1.success is True
+
+            # 验证会话已标记沙箱不可用
+            assert session.is_sandbox_available() is False
+
+            # 第二次执行 - 应该直接跳过沙箱
+            sandbox2 = DataAgentSandbox(timeout=5)
+
+            # 不需要模拟沙箱模块，因为应该直接跳过
+            result2 = await sandbox2.execute("print('test2')")
+
+            # 验证第二次执行成功
+            assert result2.success is True
+            assert "test2" in result2.output
+
+        # 清理
+        shutil.rmtree(session.session_dir)
+
+    @pytest.mark.asyncio
+    async def test_sandbox_unavailable_uses_local_execution(self):
+        """测试沙箱不可用时使用本地执行"""
+        from data_agent.sandbox import DataAgentSandbox
+        from data_agent.session import SessionManager
+
+        session = SessionManager()
+
+        # 预先标记沙箱不可用
+        session.mark_sandbox_unavailable("Test: sandbox unavailable")
+
+        with patch('data_agent.sandbox.microsandbox.get_settings') as mock_settings:
+            mock_settings.return_value = MagicMock(
+                sandbox_enabled=True,  # 配置启用，但会话标记不可用
+                sandbox_server_url="http://127.0.0.1:5555",
+                sandbox_api_key=None
+            )
+
+            sandbox = DataAgentSandbox(timeout=5)
+            result = await sandbox.execute("print('local execution')")
+
+            # 验证执行成功
+            assert result.success is True
+            assert "local execution" in result.output
+
+        # 清理
+        shutil.rmtree(session.session_dir)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
