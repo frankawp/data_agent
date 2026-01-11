@@ -249,6 +249,7 @@ class DataAgent:
         on_thinking: Optional[Callable[[str], None]] = None,
         on_tool_call: Optional[Callable[[str, dict], None]] = None,
         on_tool_result: Optional[Callable[[str, str], None]] = None,
+        should_cancel: Optional[Callable[[], bool]] = None,
     ) -> str:
         """
         流式与 Agent 对话，显示思考过程
@@ -260,16 +261,17 @@ class DataAgent:
             on_thinking: 思考内容回调函数 (content)
             on_tool_call: 工具调用回调函数 (tool_name, tool_args)
             on_tool_result: 工具结果回调函数 (tool_name, result)
+            should_cancel: 取消检查回调函数，返回 True 时中断执行
 
         Returns:
             str: Agent 最终响应
         """
         # 检查是否需要 Plan Mode
         if self._plan_executor.should_plan(user_input):
-            return self._execute_with_plan(user_input, on_thinking, on_tool_call, on_tool_result)
+            return self._execute_with_plan(user_input, on_thinking, on_tool_call, on_tool_result, should_cancel)
 
         # 正常执行流程
-        return self._execute_stream(user_input, on_thinking, on_tool_call, on_tool_result)
+        return self._execute_stream(user_input, on_thinking, on_tool_call, on_tool_result, should_cancel)
 
     def _execute_with_plan(
         self,
@@ -277,6 +279,7 @@ class DataAgent:
         on_thinking: Optional[Callable[[str], None]] = None,
         on_tool_call: Optional[Callable[[str, dict], None]] = None,
         on_tool_result: Optional[Callable[[str, str], None]] = None,
+        should_cancel: Optional[Callable[[], bool]] = None,
     ) -> str:
         """使用 Plan Mode 执行任务"""
         executor = self._plan_executor
@@ -293,7 +296,7 @@ class DataAgent:
         if not plan:
             # 解析失败，回退到普通模式
             self._console.print("[yellow]无法生成计划，将直接执行任务[/yellow]")
-            return self._execute_stream(user_input, on_thinking, on_tool_call, on_tool_result)
+            return self._execute_stream(user_input, on_thinking, on_tool_call, on_tool_result, should_cancel)
 
         # 4. 用户确认
         if not executor.confirm_plan(plan):
@@ -302,6 +305,10 @@ class DataAgent:
         # 5. 分步执行（每个步骤使用独立的消息上下文）
         self._console.print()
         for step in plan.steps:
+            # 检查是否被中断
+            if should_cancel and should_cancel():
+                raise InterruptedError("用户中断")
+
             executor.update_step_status(plan, step.index, StepStatus.RUNNING)
             executor.display_progress(plan)
 
@@ -314,9 +321,13 @@ class DataAgent:
                     step_prompt,
                     on_thinking,
                     on_tool_call,
-                    on_tool_result
+                    on_tool_result,
+                    should_cancel
                 )
                 executor.update_step_status(plan, step.index, StepStatus.COMPLETED, step_result)
+            except InterruptedError:
+                executor.update_step_status(plan, step.index, StepStatus.FAILED, "用户中断")
+                raise
             except Exception as e:
                 executor.update_step_status(plan, step.index, StepStatus.FAILED, str(e))
                 self._console.print(f"[red]步骤 {step.index} 执行失败: {e}[/red]")
@@ -334,12 +345,16 @@ class DataAgent:
         on_thinking: Optional[Callable[[str], None]] = None,
         on_tool_call: Optional[Callable[[str, dict], None]] = None,
         on_tool_result: Optional[Callable[[str, str], None]] = None,
+        should_cancel: Optional[Callable[[], bool]] = None,
     ) -> str:
         """
         使用独立消息上下文执行单个步骤
 
         Plan Mode 中每个步骤使用此方法，避免消息历史混乱。
         """
+        # 检查是否被中断
+        if should_cancel and should_cancel():
+            raise InterruptedError("用户中断")
         verbose = self._mode_manager.get("verbose")
 
         # 使用独立的消息列表（不影响主对话历史）
@@ -398,6 +413,7 @@ class DataAgent:
         on_thinking: Optional[Callable[[str], None]] = None,
         on_tool_call: Optional[Callable[[str, dict], None]] = None,
         on_tool_result: Optional[Callable[[str, str], None]] = None,
+        should_cancel: Optional[Callable[[], bool]] = None,
     ) -> str:
         """执行流式对话（核心实现）"""
         # 获取模式设置
@@ -422,6 +438,9 @@ class DataAgent:
 
         # 流式调用 Agent
         for event in self.agent.stream({"messages": messages_to_send}):
+            # 在每次迭代检查取消
+            if should_cancel and should_cancel():
+                raise InterruptedError("用户中断")
             for node_name, node_output in event.items():
                 # 跳过中间件事件（None 值或非 dict）
                 if node_output is None:

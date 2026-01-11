@@ -36,9 +36,9 @@ class DataAgentSandbox:
     def __init__(
         self,
         name: Optional[str] = None,
-        memory: int = 2048,
+        memory: Optional[int] = None,
         cpus: int = 2,
-        timeout: int = 30,
+        timeout: Optional[int] = None,
         session_id: Optional[str] = None,
     ):
         """
@@ -46,13 +46,14 @@ class DataAgentSandbox:
 
         Args:
             name: 沙箱名称，不提供则从当前会话生成
-            memory: 内存限制（MB）
+            memory: 内存限制（MB），不提供则使用配置值
             cpus: CPU核心数
-            timeout: 执行超时时间（秒）
+            timeout: 执行超时时间（秒），不提供则使用配置值
             session_id: 会话 ID，用于隔离
         """
         # 获取当前会话
         session = get_current_session()
+        self.settings = get_settings()
 
         # 确定沙箱名称（优先使用会话名称）
         if name:
@@ -62,10 +63,10 @@ class DataAgentSandbox:
         else:
             self.name = f"sandbox_{session_id}" if session_id else "data_agent"
 
-        self.memory = memory
+        # 优先使用参数，否则使用 settings 配置
+        self.memory = memory if memory is not None else self.settings.sandbox_memory
         self.cpus = cpus
-        self.timeout = timeout
-        self.settings = get_settings()
+        self.timeout = timeout if timeout is not None else self.settings.sandbox_timeout
         self._sandbox = None
         self._session = session
 
