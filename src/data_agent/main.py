@@ -4,6 +4,7 @@ CLI主入口
 基于rich库的命令行界面，支持模式切换和斜杠命令。
 """
 
+import os
 import sys
 import logging
 import json
@@ -25,9 +26,33 @@ from .config.settings import get_settings
 from .config.modes import get_mode_manager
 from .commands import get_registry, register_all_commands
 
-# 配置日志 - 默认只显示警告级别，减少噪音
+
+def setup_langsmith():
+    """
+    配置 LangSmith 可观测性
+
+    根据 settings 中的配置设置 LangChain 环境变量，
+    启用后所有 LLM 调用将自动追踪到 LangSmith。
+    """
+    settings = get_settings()
+
+    if settings.langsmith_enabled and settings.langsmith_api_key:
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
+        os.environ["LANGCHAIN_PROJECT"] = settings.langsmith_project
+        os.environ["LANGCHAIN_ENDPOINT"] = settings.langsmith_endpoint
+        return True
+    return False
+
+
+# 初始化 LangSmith（必须在导入 LangChain 相关模块之前）
+_langsmith_enabled = setup_langsmith()
+
+# 配置日志 - 从 settings 读取日志级别
+_settings = get_settings()
+_log_level = getattr(logging, _settings.log_level.upper(), logging.WARNING)
 logging.basicConfig(
-    level=logging.WARNING,
+    level=_log_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 # 禁用 httpx 的详细日志
@@ -89,8 +114,8 @@ def print_config(console: Console):
     config_table.add_column("配置项", style="cyan")
     config_table.add_column("值", style="white")
 
-    config_table.add_row("模型", settings.zhipu_model)
-    config_table.add_row("API地址", settings.zhipu_base_url)
+    config_table.add_row("模型", settings.model)
+    config_table.add_row("API地址", settings.base_url)
     config_table.add_row("数据库类型", settings.get_db_type())
     config_table.add_row("沙箱启用", "是" if settings.sandbox_enabled else "否")
     config_table.add_row("最大迭代次数", str(settings.max_iterations))
@@ -411,6 +436,9 @@ def main():
         agent = DataAgent(console=console)
         console.print(f"\n[dim]会话 ID: {agent.session_id}[/dim]")
         console.print(f"[dim]导出目录: {agent.export_dir}[/dim]")
+        if _langsmith_enabled:
+            settings = get_settings()
+            console.print(f"[dim]LangSmith: 已启用 (项目: {settings.langsmith_project})[/dim]")
         console.print("\n[green]Agent 已就绪，请输入您的需求...[/green]\n")
     except Exception as e:
         console.print(f"[red]Agent 初始化失败: {e}[/red]")
