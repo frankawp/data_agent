@@ -56,9 +56,11 @@ export function ChatSidebar({ className }: ChatSidebarProps) {
 
         case "tool_result":
           // 工具执行结果
+          // 传递 toolName 以便在 step 编号不准确时能正确匹配
           updateStreamingStepResult(
             data.step as number,
-            data.result as string
+            data.result as string,
+            data.tool_name as string
           );
           // 同时更新当前工具结果用于显示
           setCurrentToolResult({

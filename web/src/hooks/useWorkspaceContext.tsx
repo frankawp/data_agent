@@ -68,7 +68,7 @@ interface WorkspaceContextType {
   streamingSteps: StreamingStep[];
   startStreaming: () => void;
   addStreamingStep: (step: Omit<StreamingStep, "status">) => void;
-  updateStreamingStepResult: (stepNum: number, result: string) => void;
+  updateStreamingStepResult: (stepNum: number, result: string, toolName?: string) => void;
   finishStreaming: () => void;
 }
 
@@ -136,12 +136,37 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // 更新流式步骤结果
-  const updateStreamingStepResult = useCallback((stepNum: number, result: string) => {
-    setStreamingSteps((prev) =>
-      prev.map((s) =>
-        s.step === stepNum ? { ...s, result, status: "completed" } : s
-      )
-    );
+  // 注意：由于后端并行执行时 step 编号可能不准确，这里使用 toolName 匹配
+  const updateStreamingStepResult = useCallback((stepNum: number, result: string, toolName?: string) => {
+    setStreamingSteps((prev) => {
+      // 优先按 step 编号匹配
+      const exactMatch = prev.find((s) => s.step === stepNum && s.status === "running");
+      if (exactMatch) {
+        return prev.map((s) =>
+          s.step === stepNum ? { ...s, result, status: "completed" } : s
+        );
+      }
+
+      // 如果没有精确匹配，按 toolName 找第一个 running 状态的步骤
+      if (toolName) {
+        const firstRunning = prev.find((s) => s.toolName === toolName && s.status === "running");
+        if (firstRunning) {
+          return prev.map((s) =>
+            s.step === firstRunning.step ? { ...s, result, status: "completed" } : s
+          );
+        }
+      }
+
+      // 最后尝试找任意 running 状态的步骤
+      const anyRunning = prev.find((s) => s.status === "running");
+      if (anyRunning) {
+        return prev.map((s) =>
+          s.step === anyRunning.step ? { ...s, result, status: "completed" } : s
+        );
+      }
+
+      return prev;
+    });
   }, []);
 
   // 结束流式执行
