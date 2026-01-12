@@ -25,6 +25,8 @@ export function MainWorkspace() {
   const [hasNewContent, setHasNewContent] = useState(false);
   // 上一次的步骤数量
   const prevStepsCountRef = useRef(streamingSteps.length);
+  // 上一次完成的步骤数量
+  const prevCompletedCountRef = useRef(0);
 
   // 检测是否滚动到底部
   const checkIfAtBottom = useCallback(() => {
@@ -39,11 +41,22 @@ export function MainWorkspace() {
 
   // 滚动到底部
   const scrollToBottom = useCallback((smooth = true) => {
-    bottomRef.current?.scrollIntoView({
-      behavior: smooth ? "smooth" : "auto",
+    // 使用 requestAnimationFrame 确保在 DOM 更新后滚动
+    requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (container) {
+        if (smooth) {
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior: "smooth",
+          });
+        } else {
+          container.scrollTop = container.scrollHeight;
+        }
+      }
+      setHasNewContent(false);
+      setIsAtBottom(true);
     });
-    setHasNewContent(false);
-    setIsAtBottom(true);
   }, []);
 
   // 监听滚动事件
@@ -63,8 +76,8 @@ export function MainWorkspace() {
     if (currentCount > prevCount) {
       // 有新内容
       if (isAtBottom) {
-        // 在底部时自动滚动
-        scrollToBottom();
+        // 在底部时自动滚动，延迟一点确保内容渲染完成
+        setTimeout(() => scrollToBottom(), 50);
       } else {
         // 不在底部时显示新内容提示
         setHasNewContent(true);
@@ -73,6 +86,23 @@ export function MainWorkspace() {
 
     prevStepsCountRef.current = currentCount;
   }, [streamingSteps.length, isAtBottom, scrollToBottom]);
+
+  // 当步骤完成时（结果返回）也滚动到底部
+  useEffect(() => {
+    const completedCount = streamingSteps.filter((s) => s.status === "completed").length;
+    const prevCompleted = prevCompletedCountRef.current;
+
+    if (completedCount > prevCompleted) {
+      // 有新完成的步骤
+      if (isAtBottom) {
+        setTimeout(() => scrollToBottom(), 100);
+      } else {
+        setHasNewContent(true);
+      }
+    }
+
+    prevCompletedCountRef.current = completedCount;
+  }, [streamingSteps, isAtBottom, scrollToBottom]);
 
   // 流式开始时滚动到底部
   useEffect(() => {
