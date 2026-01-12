@@ -109,7 +109,8 @@ def execute_sql(query: str, database: str = "default") -> str:
                 df_display = df
                 result_parts.append(f"查询结果（共 {total_rows} 行）:")
 
-            result_parts.append(df_display.to_string())
+            # 使用 CSV 格式输出，便于前端解析和显示
+            result_parts.append(df_display.to_csv(index=False))
 
             # 自动导出
             if export_mode:

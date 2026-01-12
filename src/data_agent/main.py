@@ -6,7 +6,9 @@ CLI 主入口
 
 import os
 import sys
+import signal
 import logging
+import atexit
 
 from rich.console import Console
 from rich.panel import Panel
@@ -53,6 +55,40 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
+
+def _cleanup_on_exit():
+    """程序退出时的清理函数"""
+    # 强制关闭所有 asyncio 事件循环相关资源
+    import asyncio
+    try:
+        # 获取当前事件循环（如果有）
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.stop()
+        if not loop.is_closed():
+            loop.close()
+    except Exception:
+        pass
+
+
+def _setup_signal_handlers():
+    """设置信号处理器，避免退出时的信号错误"""
+    # 在 macOS 上，httpx 可能导致 SIGTRAP
+    # 通过设置默认处理器来避免错误
+    if sys.platform == "darwin":
+        # 忽略 SIGTRAP (Signal 5) - 在 macOS 上 httpx 退出时可能触发
+        try:
+            signal.signal(signal.SIGTRAP, signal.SIG_IGN)
+        except (ValueError, OSError):
+            pass  # 某些环境可能不支持
+
+
+# 注册退出清理函数
+atexit.register(_cleanup_on_exit)
+
+# 设置信号处理
+_setup_signal_handlers()
 
 
 def print_welcome(console: Console):

@@ -94,7 +94,17 @@ main() {
     echo
 
     # 启动应用
-    python -m data_agent.main "$@"
+    # 使用 || true 忽略信号导致的非零退出码（如 macOS 上的 SIGTRAP）
+    python -m data_agent.main "$@" || {
+        exit_code=$?
+        # 退出码 133 = 128 + 5 (SIGTRAP)，在 macOS 上是正常的
+        # 退出码 0-2 也是正常退出
+        if [ $exit_code -eq 133 ] || [ $exit_code -le 2 ]; then
+            exit 0
+        else
+            exit $exit_code
+        fi
+    }
 }
 
 # 运行

@@ -30,6 +30,10 @@ dependencies = [
     "langchain-openai>=0.2.0",
     "langgraph>=0.2.0",
 
+    # Web API
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+
     # CLI
     "rich>=13.0.0",
     "prompt_toolkit>=3.0.0",
@@ -72,6 +76,7 @@ dev = [
 
 [project.scripts]
 data-agent = "data_agent.main:main_async"
+data-agent-api = "data_agent.api.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/data_agent"]
