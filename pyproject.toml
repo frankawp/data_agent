@@ -30,8 +30,13 @@ dependencies = [
     "langchain-openai>=0.2.0",
     "langgraph>=0.2.0",
 
+    # Web API
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+
     # CLI
     "rich>=13.0.0",
+    "prompt_toolkit>=3.0.0",
 
     # 数据库
     "sqlalchemy>=2.0.0",
@@ -64,12 +69,14 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
+    "pexpect>=4.8.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
 ]
 
 [project.scripts]
-data-agent = "data_agent.main:main"
+data-agent = "data_agent.main:main_async"
+data-agent-api = "data_agent.api.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/data_agent"]
@@ -82,3 +89,8 @@ target-version = ["py310"]
 line-length = 100
 select = ["E", "F", "I", "N", "W"]
 ignore = ["E501"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: 标记为慢速测试，需要真实的 Agent 执行"
+]

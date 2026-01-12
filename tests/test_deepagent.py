@@ -161,9 +161,8 @@ class TestMainEntry:
 
     def test_import_helpers(self):
         """测试辅助函数导入"""
-        from data_agent.main import print_welcome, print_help, print_config
+        from data_agent.main import print_welcome, print_config
         assert print_welcome is not None
-        assert print_help is not None
         assert print_config is not None
 
 

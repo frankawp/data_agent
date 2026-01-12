@@ -1,40 +1,94 @@
 """
-CLI主入口
+CLI 主入口
 
-基于rich库的命令行界面，支持模式切换和斜杠命令。
+基于 rich 库的命令行界面，支持模式切换和斜杠命令。
 """
 
+import os
 import sys
+import signal
 import logging
-import json
-import re
+import atexit
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
-from rich.prompt import Prompt
 from rich.table import Table
-from rich.live import Live
-from rich.text import Text
-from rich.spinner import Spinner
-from rich.padding import Padding
-from rich.syntax import Syntax
 
 from .agent.deep_agent import DataAgent
 from .config.settings import get_settings
 from .config.modes import get_mode_manager
-from .commands import get_registry, register_all_commands
+from .commands import register_all_commands
+from .ui import StepPager
+from .cli import SyncCLI
 
-# 配置日志 - 默认只显示警告级别，减少噪音
+
+def setup_langsmith():
+    """
+    配置 LangSmith 可观测性
+
+    根据 settings 中的配置设置 LangChain 环境变量，
+    启用后所有 LLM 调用将自动追踪到 LangSmith。
+    """
+    settings = get_settings()
+
+    if settings.langsmith_enabled and settings.langsmith_api_key:
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
+        os.environ["LANGCHAIN_PROJECT"] = settings.langsmith_project
+        os.environ["LANGCHAIN_ENDPOINT"] = settings.langsmith_endpoint
+        return True
+    return False
+
+
+# 初始化 LangSmith（必须在导入 LangChain 相关模块之前）
+_langsmith_enabled = setup_langsmith()
+
+# 配置日志
+_settings = get_settings()
+_log_level = getattr(logging, _settings.log_level.upper(), logging.WARNING)
 logging.basicConfig(
-    level=logging.WARNING,
+    level=_log_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-# 禁用 httpx 的详细日志
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
+
+def _cleanup_on_exit():
+    """程序退出时的清理函数"""
+    # 强制关闭所有 asyncio 事件循环相关资源
+    import asyncio
+    try:
+        # 获取当前事件循环（如果有）
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.stop()
+        if not loop.is_closed():
+            loop.close()
+    except Exception:
+        pass
+
+
+def _setup_signal_handlers():
+    """设置信号处理器，避免退出时的信号错误"""
+    # 在 macOS 上，httpx 可能导致 SIGTRAP
+    # 通过设置默认处理器来避免错误
+    if sys.platform == "darwin":
+        # 忽略 SIGTRAP (Signal 5) - 在 macOS 上 httpx 退出时可能触发
+        try:
+            signal.signal(signal.SIGTRAP, signal.SIG_IGN)
+        except (ValueError, OSError):
+            pass  # 某些环境可能不支持
+
+
+# 注册退出清理函数
+atexit.register(_cleanup_on_exit)
+
+# 设置信号处理
+_setup_signal_handlers()
 
 
 def print_welcome(console: Console):
@@ -67,20 +121,6 @@ def print_welcome(console: Console):
     console.print(Panel(Markdown(welcome_text), title="Data Agent", border_style="blue"))
 
 
-def print_help(console: Console):
-    """打印帮助信息"""
-    help_table = Table(title="命令帮助")
-    help_table.add_column("命令", style="cyan")
-    help_table.add_column("说明", style="white")
-
-    help_table.add_row("help", "显示帮助信息")
-    help_table.add_row("clear", "清除对话历史")
-    help_table.add_row("config", "显示配置信息")
-    help_table.add_row("exit / quit / q", "退出程序")
-
-    console.print(help_table)
-
-
 def print_config(console: Console):
     """打印配置信息"""
     settings = get_settings()
@@ -89,8 +129,8 @@ def print_config(console: Console):
     config_table.add_column("配置项", style="cyan")
     config_table.add_column("值", style="white")
 
-    config_table.add_row("模型", settings.zhipu_model)
-    config_table.add_row("API地址", settings.zhipu_base_url)
+    config_table.add_row("模型", settings.model)
+    config_table.add_row("API地址", settings.base_url)
     config_table.add_row("数据库类型", settings.get_db_type())
     config_table.add_row("沙箱启用", "是" if settings.sandbox_enabled else "否")
     config_table.add_row("最大迭代次数", str(settings.max_iterations))
@@ -113,285 +153,19 @@ def validate_config(console: Console) -> bool:
     return True
 
 
-# ==================== 输出格式化函数 ====================
-
-def format_todos_result(result: str, console: Console) -> None:
-    """格式化 write_todos 结果"""
-    # 尝试解析 JSON 格式的 todos
-    try:
-        # 从结果中提取 JSON 列表
-        match = re.search(r'\[.*\]', result, re.DOTALL)
-        if match:
-            json_str = match.group()
-            # 将单引号转换为双引号以兼容 Python 格式
-            json_str = json_str.replace("'", '"')
-            todos = json.loads(json_str)
-        else:
-            console.print(f"    [dim]{result[:200]}...[/dim]" if len(result) > 200 else f"    [dim]{result}[/dim]")
-            return
-
-        console.print("    [bold]任务进度:[/bold]")
-        for todo in todos:
-            content = todo.get("content", "")
-            status = todo.get("status", "pending")
-
-            if status == "completed":
-                console.print(f"    [green]✓[/green] [dim]{content}[/dim]")
-            elif status == "in_progress":
-                console.print(f"    [yellow]→[/yellow] [bold]{content}[/bold]")
-            else:
-                console.print(f"    [dim]○[/dim] {content}")
-
-    except (json.JSONDecodeError, TypeError):
-        # 如果解析失败，显示原始结果
-        console.print(f"    [dim]{result[:200]}...[/dim]" if len(result) > 200 else f"    [dim]{result}[/dim]")
-
-
-def format_sql_result(result: str, console: Console, max_rows: int = 15) -> None:
-    """格式化 SQL 查询结果为表格"""
-    lines = result.strip().split("\n")
-
-    # 跳过前缀（如 "查询结果:"）
-    data_start = 0
-    for i, line in enumerate(lines):
-        if line.strip().startswith(("查询结果", "Query result")):
-            data_start = i + 1
-            break
-
-    if data_start >= len(lines):
-        console.print(f"    [dim]{result[:300]}[/dim]")
-        return
-
-    data_lines = lines[data_start:]
-    if not data_lines:
-        console.print(f"    [dim]{result[:300]}[/dim]")
-        return
-
-    # 解析表格数据
-    try:
-        # 尝试解析 DataFrame 格式的输出
-        # 格式通常是: "   col1  col2  col3" (header) 然后 "0  val1  val2  val3" (rows)
-        header_line = None
-        data_rows = []
-
-        for line in data_lines:
-            line = line.strip()
-            if not line:
-                continue
-
-            # 检测是否是带索引的数据行（以数字开头）
-            if re.match(r'^\d+\s+', line):
-                # 移除索引列
-                parts = re.split(r'\s{2,}', line.strip())
-                if parts:
-                    data_rows.append(parts[1:] if len(parts) > 1 else parts)
-            elif header_line is None and line:
-                # 第一行非空行作为表头
-                header_line = line
-
-        if header_line:
-            # 解析表头
-            headers = re.split(r'\s{2,}', header_line.strip())
-
-            # 创建 Rich Table
-            table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1))
-
-            for header in headers:
-                table.add_column(header)
-
-            # 添加数据行（限制行数）
-            shown_rows = 0
-            for row in data_rows:
-                if shown_rows >= max_rows:
-                    break
-                # 确保列数匹配
-                while len(row) < len(headers):
-                    row.append("")
-                table.add_row(*row[:len(headers)])
-                shown_rows += 1
-
-            console.print(Padding(table, (0, 0, 0, 4)))
-
-            if len(data_rows) > max_rows:
-                console.print(f"    [dim]... 还有 {len(data_rows) - max_rows} 行未显示[/dim]")
-
-            return
-
-    except Exception:
-        pass
-
-    # 如果解析失败，显示原始结果
-    preview = result[:500] + "..." if len(result) > 500 else result
-    console.print(f"    [dim]{preview}[/dim]")
-
-
-def format_table_list(result: str, console: Console) -> None:
-    """格式化表列表"""
-    lines = result.strip().split("\n")
-
-    tables = []
-    for line in lines:
-        line = line.strip()
-        if line.startswith("-"):
-            table_name = line[1:].strip()
-            tables.append(table_name)
-        elif line and not line.startswith(("数据库", "Database")):
-            tables.append(line)
-
-    if not tables:
-        console.print(f"    [dim]{result}[/dim]")
-        return
-
-    # 分类显示
-    views = [t for t in tables if t.endswith(("_list", "_info", "v_"))]
-    regular = [t for t in tables if t not in views]
-
-    if regular:
-        console.print(f"    [bold]数据表 ({len(regular)}):[/bold]")
-        # 每行显示多个表名
-        for i in range(0, len(regular), 4):
-            row = regular[i:i+4]
-            console.print("    " + "  ".join(f"[cyan]{t}[/cyan]" for t in row))
-
-    if views:
-        console.print(f"    [bold]视图 ({len(views)}):[/bold]")
-        for i in range(0, len(views), 4):
-            row = views[i:i+4]
-            console.print("    " + "  ".join(f"[dim cyan]{t}[/dim cyan]" for t in row))
-
-
-def format_describe_result(result: str, console: Console) -> None:
-    """格式化表结构描述"""
-    lines = result.strip().split("\n")
-
-    # 解析列信息
-    try:
-        # 跳过标题行（如 "表 xxx 的结构:"）
-        data_start = 0
-        for i, line in enumerate(lines):
-            if "Field" in line and "Type" in line:
-                data_start = i
-                break
-
-        if data_start < len(lines):
-            # 创建表格
-            table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
-            table.add_column("字段", style="cyan")
-            table.add_column("类型", style="yellow")
-            table.add_column("可空")
-            table.add_column("键")
-
-            for line in lines[data_start + 1:]:
-                # DataFrame 格式: "0  field_name  type  null  key  default  extra"
-                if re.match(r'^\d+\s+', line.strip()):
-                    parts = re.split(r'\s{2,}', line.strip())
-                    if len(parts) >= 3:
-                        # 跳过索引列
-                        field = parts[1] if len(parts) > 1 else ""
-                        dtype = parts[2] if len(parts) > 2 else ""
-                        nullable = parts[3] if len(parts) > 3 else ""
-                        key = parts[4] if len(parts) > 4 else ""
-                        table.add_row(field, dtype, nullable, key)
-
-            console.print(Padding(table, (0, 0, 0, 4)))
-            return
-
-    except Exception:
-        pass
-
-    # 回退到默认显示
-    preview = result[:500] + "..." if len(result) > 500 else result
-    console.print(f"    [dim]{preview}[/dim]")
-
-
-def format_default_result(result: str, console: Console, max_length: int = 500) -> None:
-    """默认结果格式化"""
-    result = result.strip()
-    if len(result) > max_length:
-        console.print(f"    [dim]{result[:max_length]}...[/dim]")
-    else:
-        # 多行结果缩进显示
-        for line in result.split("\n")[:20]:  # 最多显示20行
-            console.print(f"    [dim]{line}[/dim]")
-        if result.count("\n") > 20:
-            console.print(f"    [dim]... 还有更多内容[/dim]")
-
-
-def format_tool_result(tool_name: str, result: str, console: Console) -> None:
-    """根据工具类型格式化结果"""
-    # write_todos 结果
-    if tool_name == "write_todos":
-        format_todos_result(result, console)
-        return
-
-    # SQL 查询结果
-    if tool_name == "execute_sql":
-        format_sql_result(result, console)
-        return
-
-    # 表列表
-    if tool_name == "list_tables":
-        format_table_list(result, console)
-        return
-
-    # 表结构
-    if tool_name == "describe_table":
-        format_describe_result(result, console)
-        return
-
-    # 默认格式
-    format_default_result(result, console)
-
-
-def format_sql_query(query: str, console: Console) -> None:
-    """格式化显示 SQL 查询"""
-    # 清理查询
-    query = query.strip()
-
-    # 使用 Syntax 高亮显示
-    syntax = Syntax(query, "sql", theme="monokai", line_numbers=False, word_wrap=True)
-    console.print(Padding(syntax, (0, 0, 0, 4)))
-
-
-def format_tool_args_display(tool_name: str, args: dict, console: Console) -> None:
-    """格式化显示工具参数"""
-    if not args:
-        return
-
-    # SQL 查询特殊处理
-    if "query" in args and tool_name == "execute_sql":
-        format_sql_query(args["query"], console)
-        # 显示其他参数
-        other_args = {k: v for k, v in args.items() if k != "query"}
-        if other_args:
-            for key, value in other_args.items():
-                console.print(f"    [dim]{key}:[/dim] {value}")
-        return
-
-    # todos 参数特殊处理
-    if tool_name == "write_todos" and "todos" in args:
-        todos = args["todos"]
-        if isinstance(todos, list):
-            console.print("    [dim]更新任务列表...[/dim]")
-            return
-
-    # 默认参数显示
-    for key, value in args.items():
-        value_str = str(value)
-        if len(value_str) > 100:
-            value_str = value_str[:100] + "..."
-        console.print(f"    [dim]{key}:[/dim] {value_str}")
-
-
-# ==================== 主函数 ====================
-
 def main():
-    """主函数"""
+    """主函数
+
+    同步 CLI：
+    - Ctrl+C 中断执行
+    - 输入 :数字 查看历史步骤
+    - 支持斜杠命令
+    - 输入 exit 退出程序
+    """
     console = Console()
 
     # 注册所有命令
     register_all_commands()
-    registry = get_registry()
     mode_manager = get_mode_manager()
 
     # 打印欢迎信息
@@ -405,118 +179,27 @@ def main():
     console.print()
     mode_manager.display_modes(console)
 
+    # 创建步骤历史查看器
+    step_pager = StepPager(console)
+
     # 创建 Agent
-    agent = None
     try:
         agent = DataAgent(console=console)
-        console.print("\n[green]Agent 已就绪，请输入您的需求...[/green]\n")
+        if _langsmith_enabled:
+            settings = get_settings()
+            console.print(f"[dim]LangSmith: 已启用 (项目: {settings.langsmith_project})[/dim]")
     except Exception as e:
         console.print(f"[red]Agent 初始化失败: {e}[/red]")
         return 1
 
-    # 主循环
-    while True:
-        try:
-            # 获取用户输入
-            user_input = Prompt.ask("[bold cyan]您[/bold cyan]")
+    # 创建 CLI 并运行
+    cli = SyncCLI(agent, console, step_pager)
 
-            if not user_input.strip():
-                continue
-
-            # 处理斜杠命令
-            if user_input.strip().startswith("/"):
-                cmd_input = user_input.strip()
-
-                # 特殊处理需要访问 agent 的命令
-                if cmd_input.lower() == "/clear":
-                    agent.clear_history()
-                    console.print("[green]对话历史已清除。[/green]")
-                    continue
-                elif cmd_input.lower() == "/config":
-                    print_config(console)
-                    continue
-
-                # 使用命令注册表处理其他命令
-                registry.execute(cmd_input, console)
-                continue
-
-            # 处理退出命令（保持向后兼容）
-            cmd = user_input.strip().lower()
-            if cmd in ["exit", "quit", "q", "退出"]:
-                console.print("[yellow]再见！[/yellow]")
-                break
-
-            # 处理旧式命令（保持向后兼容）
-            if cmd == "help":
-                registry.show_help(console)
-                continue
-            elif cmd == "config":
-                print_config(console)
-                continue
-            elif cmd == "clear":
-                agent.clear_history()
-                console.print("[green]对话历史已清除。[/green]")
-                continue
-
-            # 处理用户输入 - 显示思考过程
-            console.print()  # 空行
-            step_count = [0]  # 使用列表以便在闭包中修改
-
-            def on_thinking(content: str):
-                """显示思考内容（verbose 模式下）"""
-                # verbose 模式的判断在 DataAgent 中处理
-                console.print(f"[dim]{content[:200]}...[/dim]" if len(content) > 200 else f"[dim]{content}[/dim]")
-
-            def on_tool_call(tool_name: str, tool_args: dict):
-                """显示工具调用"""
-                step_count[0] += 1
-                console.print(
-                    f"  [bold cyan]Step {step_count[0]}[/bold cyan]  "
-                    f"[bold yellow]{tool_name}[/bold yellow]"
-                )
-                format_tool_args_display(tool_name, tool_args, console)
-
-            def on_tool_result(tool_name: str, result: str):
-                """显示工具结果"""
-                format_tool_result(tool_name, result, console)
-                console.print()  # 空行分隔
-
-            try:
-                console.print("[bold blue]思考中...[/bold blue]")
-                console.print()
-
-                response = agent.chat_stream(
-                    user_input,
-                    on_thinking=on_thinking,
-                    on_tool_call=on_tool_call,
-                    on_tool_result=on_tool_result,
-                )
-
-            except Exception as e:
-                logger.error(f"处理失败: {e}")
-                console.print(f"[red]处理失败: {e}[/red]")
-                continue
-
-            # 显示最终响应
-            if response:
-                console.print(Panel(
-                    Markdown(response),
-                    title="Agent 回复",
-                    border_style="green"
-                ))
-            console.print()  # 空行
-
-        except KeyboardInterrupt:
-            console.print("\n[yellow]已中断。输入 'exit' 退出。[/yellow]")
-            continue
-
-        except EOFError:
-            console.print("\n[yellow]再见！[/yellow]")
-            break
-
-        except Exception as e:
-            logger.error(f"未知错误: {e}")
-            console.print(f"[red]发生错误: {e}[/red]")
+    try:
+        cli.run()
+    except Exception as e:
+        console.print(f"\n[red]程序异常: {e}[/red]")
+        return 1
 
     return 0
 

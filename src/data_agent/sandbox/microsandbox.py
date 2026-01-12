@@ -1,15 +1,17 @@
 """
 MicroSandbox安全沙箱封装
 
-提供安全的Python代码执行环境。
+提供安全的Python代码执行环境，支持会话隔离。
 """
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
 from ..config.settings import get_settings
+from ..session import get_current_session
 
 logger = logging.getLogger(__name__)
 
@@ -28,30 +30,55 @@ class DataAgentSandbox:
     数据分析Agent的安全沙箱
 
     使用MicroSandbox提供硬件级别的代码隔离执行环境。
+    支持会话隔离，每个会话使用独立的沙箱实例。
     """
 
     def __init__(
         self,
-        name: str = "data_agent",
-        memory: int = 2048,
+        name: Optional[str] = None,
+        memory: Optional[int] = None,
         cpus: int = 2,
-        timeout: int = 30,
+        timeout: Optional[int] = None,
+        session_id: Optional[str] = None,
     ):
         """
         初始化沙箱
 
         Args:
-            name: 沙箱名称
-            memory: 内存限制（MB）
+            name: 沙箱名称，不提供则从当前会话生成
+            memory: 内存限制（MB），不提供则使用配置值
             cpus: CPU核心数
-            timeout: 执行超时时间（秒）
+            timeout: 执行超时时间（秒），不提供则使用配置值
+            session_id: 会话 ID，用于隔离
         """
-        self.name = name
-        self.memory = memory
-        self.cpus = cpus
-        self.timeout = timeout
+        # 获取当前会话
+        session = get_current_session()
         self.settings = get_settings()
+
+        # 确定沙箱名称（优先使用会话名称）
+        if name:
+            self.name = name
+        elif session:
+            self.name = session.get_sandbox_name()
+        else:
+            self.name = f"sandbox_{session_id}" if session_id else "data_agent"
+
+        # 优先使用参数，否则使用 settings 配置
+        self.memory = memory if memory is not None else self.settings.sandbox_memory
+        self.cpus = cpus
+        self.timeout = timeout if timeout is not None else self.settings.sandbox_timeout
         self._sandbox = None
+        self._session = session
+
+        # 设置导出目录（用于 volume 挂载）
+        if session:
+            self.export_dir = session.export_dir
+            self.workspace_dir = session.workspace_dir
+        else:
+            self.export_dir = Path.home() / ".data_agent" / "exports"
+            self.workspace_dir = Path.home() / ".data_agent" / "workspace"
+            self.export_dir.mkdir(parents=True, exist_ok=True)
+            self.workspace_dir.mkdir(parents=True, exist_ok=True)
 
     async def execute(self, code: str) -> ExecutionResult:
         """
@@ -66,13 +93,21 @@ class DataAgentSandbox:
         import time
         start_time = time.time()
 
+        # 检查配置是否禁用沙箱
         if not self.settings.sandbox_enabled:
+            return await self._execute_local(code, start_time)
+
+        # 检查会话中沙箱是否已标记为不可用（避免重复尝试连接）
+        if self._session and not self._session.is_sandbox_available():
             return await self._execute_local(code, start_time)
 
         try:
             from microsandbox import PythonSandbox
 
+            logger.debug(f"创建沙箱: {self.name}, 导出目录: {self.export_dir}")
+
             # 使用 async with 语法创建和管理沙箱
+            # 沙箱名称使用会话唯一名称，实现会话隔离
             async with PythonSandbox.create(
                 name=self.name,
                 server_url=self.settings.sandbox_server_url or None,
@@ -93,6 +128,9 @@ class DataAgentSandbox:
 
         except ImportError:
             logger.warning("MicroSandbox未安装，将使用本地执行模式")
+            # 标记沙箱为不可用，后续不再重试
+            if self._session:
+                self._session.mark_sandbox_unavailable("MicroSandbox 未安装")
             return await self._execute_local(code, start_time)
         except asyncio.TimeoutError:
             return ExecutionResult(
@@ -103,7 +141,9 @@ class DataAgentSandbox:
             )
         except Exception as e:
             logger.warning(f"MicroSandbox执行失败: {e}，将使用本地执行模式")
-            # 回退到本地执行
+            # 标记沙箱为不可用，后续不再重试
+            if self._session:
+                self._session.mark_sandbox_unavailable(str(e))
             return await self._execute_local(code, start_time)
 
     async def _execute_local(self, code: str, start_time: float) -> ExecutionResult:
@@ -242,6 +282,18 @@ class DataAgentSandbox:
         full_code = "\n".join(data_setup) + "\n" + code
         return await self.execute(full_code)
 
+    def get_export_path(self, filename: str) -> Path:
+        """
+        获取导出文件的完整路径
+
+        Args:
+            filename: 文件名
+
+        Returns:
+            完整的文件路径
+        """
+        return self.export_dir / filename
+
     async def close(self):
         """关闭沙箱"""
         if self._sandbox is not None:
@@ -275,11 +327,6 @@ def execute_python_sync(code: str, timeout: int = 30) -> ExecutionResult:
     """
     sandbox = DataAgentSandbox(timeout=timeout)
 
-    # 在事件循环中运行
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-    return loop.run_until_complete(sandbox.execute(code))
+    # 使用 asyncio.run() 自动管理事件循环的生命周期
+    # 这会创建新的事件循环，执行协程，然后正确关闭循环
+    return asyncio.run(sandbox.execute(code))

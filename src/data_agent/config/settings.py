@@ -42,10 +42,12 @@ class Settings(BaseSettings):
     # MicroSandbox配置
     sandbox_enabled: bool = Field(
         default=True,
+        alias="SANDBOX_ENABLED",
         description="是否启用MicroSandbox沙箱"
     )
     sandbox_server_url: str = Field(
         default="http://127.0.0.1:5555",
+        alias="SANDBOX_SERVER_URL",
         description="MicroSandbox服务器地址"
     )
     sandbox_api_key: str = Field(
@@ -55,16 +57,19 @@ class Settings(BaseSettings):
     )
     sandbox_timeout: int = Field(
         default=30,
+        alias="SANDBOX_TIMEOUT",
         description="沙箱执行超时时间（秒）"
     )
     sandbox_memory: int = Field(
         default=2048,
+        alias="SANDBOX_MEMORY",
         description="沙箱内存限制（MB）"
     )
 
     # Agent配置
     max_iterations: int = Field(
         default=10,
+        alias="MAX_ITERATIONS",
         description="Agent最大迭代次数"
     )
 
@@ -87,12 +92,36 @@ class Settings(BaseSettings):
 
     # 日志配置
     log_level: str = Field(
-        default="INFO",
+        default="WARNING",
+        alias="LOG_LEVEL",
         description="日志级别"
     )
     log_file: Optional[str] = Field(
         default=None,
+        alias="LOG_FILE",
         description="日志文件路径"
+    )
+
+    # LangSmith 可观测性配置
+    langsmith_enabled: bool = Field(
+        default=False,
+        alias="LANGSMITH_TRACING",
+        description="启用 LangSmith 追踪"
+    )
+    langsmith_api_key: str = Field(
+        default="",
+        alias="LANGSMITH_API_KEY",
+        description="LangSmith API 密钥"
+    )
+    langsmith_project: str = Field(
+        default="data_agent",
+        alias="LANGSMITH_PROJECT",
+        description="LangSmith 项目名称"
+    )
+    langsmith_endpoint: str = Field(
+        default="https://api.smith.langchain.com",
+        alias="LANGSMITH_ENDPOINT",
+        description="LangSmith API 端点"
     )
 
     class Config:

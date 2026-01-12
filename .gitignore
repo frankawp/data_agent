@@ -54,5 +54,5 @@ htmlcov/
 *.temp
 .DS_Store
 
-# 本地测试文件
-test_sandbox.py
+# 本地测试文件（仅根目录）
+/test_sandbox.py

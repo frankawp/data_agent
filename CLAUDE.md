@@ -76,3 +76,4 @@ DeepAgents 图 + 智谱 AI LLM (glm-4.7)
 - 跟我使用中文交流，写注释和说明文档都是中文
 - 添加新工具时在 `tools/` 目录创建，并在 `tools/__init__.py` 导出
 - 工具函数需要完整的 docstring，因为 LLM 依赖它理解工具用途
+- 启动 MicroSandbox 前需要先取消代理设置：`unset HTTPS_PROXY && msb run data_agent`

@@ -1,26 +1,41 @@
 # MicroSandbox 配置文件
 # 用于定义数据分析Agent的安全执行环境
+# 注意：必须使用 microsandbox/python 镜像以支持 Portal 服务
 
 sandboxes:
+  # 主数据分析沙箱
   data_agent:
-    image: python
+    image: microsandbox/python
     memory: 2048
     cpus: 2
     scripts:
       start: python -c "print('Data Agent Sandbox Ready')"
     packages:
+      # 数据分析基础
       - pandas
       - numpy
       - scipy
+
+      # 科学计算
       - scikit-learn
-      - networkx
-      - duckdb
+
+      # 可视化
       - matplotlib
       - seaborn
 
+      # 数据库连接 (MySQL)
+      - sqlalchemy
+      - pymysql
+
+      # 图分析
+      - networkx
+
+      # 工具
+      - duckdb
+
   # 轻量级沙箱，用于简单的Python脚本执行
   lightweight:
-    image: python
+    image: microsandbox/python
     memory: 512
     cpus: 1
     packages:
