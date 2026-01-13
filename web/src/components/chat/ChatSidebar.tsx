@@ -23,6 +23,8 @@ export function ChatSidebar({ className }: ChatSidebarProps) {
     finishStreaming,
     isStreaming,
     streamingSteps,
+    addSubagentStep,
+    updateSubagentStepResult,
   } = useWorkspace();
 
   const [messages, setMessages] = useState<Message[]>([
@@ -75,6 +77,25 @@ export function ChatSidebar({ className }: ChatSidebarProps) {
           console.log("AI thinking:", data.content);
           break;
 
+        case "subagent_tool_call":
+          // 子代理工具调用开始
+          addSubagentStep({
+            subagentName: data.subagent_name as string,
+            step: data.step as number,
+            toolName: data.tool_name as string,
+            args: data.args as Record<string, unknown>,
+          });
+          break;
+
+        case "subagent_tool_result":
+          // 子代理工具执行结果
+          updateSubagentStepResult({
+            subagentName: data.subagent_name as string,
+            step: data.step as number,
+            result: data.result as string,
+          });
+          break;
+
         case "message":
           // 最终消息
           return data.content as string;
@@ -89,7 +110,7 @@ export function ChatSidebar({ className }: ChatSidebarProps) {
       }
       return null;
     },
-    [addStreamingStep, updateStreamingStepResult, setCurrentToolResult, finishStreaming]
+    [addStreamingStep, updateStreamingStepResult, setCurrentToolResult, finishStreaming, addSubagentStep, updateSubagentStepResult]
   );
 
   const sendMessage = async () => {

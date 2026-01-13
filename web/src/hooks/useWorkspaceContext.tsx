@@ -29,6 +29,16 @@ export interface ToolResult {
   result: string;
 }
 
+// 子代理工具执行步骤
+export interface SubagentStep {
+  step: number;
+  subagentName: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  result?: string;
+  status: "running" | "completed" | "error";
+}
+
 // 流式执行步骤
 export interface StreamingStep {
   step: number;
@@ -36,6 +46,9 @@ export interface StreamingStep {
   args: Record<string, unknown>;
   result?: string;
   status: "running" | "completed" | "error";
+  // 子代理信息（当 toolName 为 "task" 时有效）
+  subagentName?: string;           // 当前执行的子代理名称
+  subagentSteps?: SubagentStep[];  // 子代理内部的工具调用步骤
 }
 
 // 工作区上下文类型
@@ -70,6 +83,19 @@ interface WorkspaceContextType {
   addStreamingStep: (step: Omit<StreamingStep, "status">) => void;
   updateStreamingStepResult: (stepNum: number, result: string, toolName?: string) => void;
   finishStreaming: () => void;
+
+  // 子代理步骤管理
+  addSubagentStep: (data: {
+    subagentName: string;
+    step: number;
+    toolName: string;
+    args: Record<string, unknown>;
+  }) => void;
+  updateSubagentStepResult: (data: {
+    subagentName: string;
+    step: number;
+    result: string;
+  }) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | null>(null);
@@ -188,6 +214,88 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     });
   }, [addStepToHistory]);
 
+  // 添加子代理工具调用步骤
+  const addSubagentStep = useCallback(
+    (data: {
+      subagentName: string;
+      step: number;
+      toolName: string;
+      args: Record<string, unknown>;
+    }) => {
+      setStreamingSteps((prev) => {
+        // 找到当前正在执行的 task 步骤（最后一个 running 状态的 task）
+        const taskStepIndex = prev.findLastIndex(
+          (s) => s.toolName === "task" && s.status === "running"
+        );
+
+        if (taskStepIndex === -1) {
+          // 没有找到正在执行的 task，直接返回
+          return prev;
+        }
+
+        // 更新 task 步骤，添加子代理信息
+        const updated = [...prev];
+        const taskStep = updated[taskStepIndex];
+        const existingSubSteps = taskStep.subagentSteps || [];
+
+        updated[taskStepIndex] = {
+          ...taskStep,
+          subagentName: data.subagentName,
+          subagentSteps: [
+            ...existingSubSteps,
+            {
+              step: data.step,
+              subagentName: data.subagentName,
+              toolName: data.toolName,
+              args: data.args,
+              status: "running",
+            },
+          ],
+        };
+
+        return updated;
+      });
+    },
+    []
+  );
+
+  // 更新子代理工具执行结果
+  const updateSubagentStepResult = useCallback(
+    (data: { subagentName: string; step: number; result: string }) => {
+      setStreamingSteps((prev) => {
+        // 找到包含该子代理步骤的 task
+        const taskStepIndex = prev.findIndex(
+          (s) =>
+            s.toolName === "task" &&
+            s.subagentName === data.subagentName &&
+            s.subagentSteps?.some(
+              (sub) => sub.step === data.step && sub.status === "running"
+            )
+        );
+
+        if (taskStepIndex === -1) {
+          return prev;
+        }
+
+        const updated = [...prev];
+        const taskStep = updated[taskStepIndex];
+        const updatedSubSteps = taskStep.subagentSteps?.map((sub) =>
+          sub.step === data.step && sub.subagentName === data.subagentName
+            ? { ...sub, result: data.result, status: "completed" as const }
+            : sub
+        );
+
+        updated[taskStepIndex] = {
+          ...taskStep,
+          subagentSteps: updatedSubSteps,
+        };
+
+        return updated;
+      });
+    },
+    []
+  );
+
   return (
     <WorkspaceContext.Provider
       value={{
@@ -210,6 +318,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         addStreamingStep,
         updateStreamingStepResult,
         finishStreaming,
+        addSubagentStep,
+        updateSubagentStepResult,
       }}
     >
       {children}

@@ -142,6 +142,7 @@ class DataAgent:
     提供更简洁的接口来使用 DeepAgent。
     支持运行时模式切换（Plan Mode、Auto Execute 等）。
     支持会话隔离，每个会话拥有独立的沙箱和导出目录。
+    支持多 Agent 模式（使用 subagents 进行任务分工）。
     """
 
     def __init__(
@@ -149,6 +150,7 @@ class DataAgent:
         model: Optional[str] = None,
         console: Optional[Console] = None,
         session_id: Optional[str] = None,
+        multi_agent: Optional[bool] = None,
     ):
         """
         初始化数据分析 Agent
@@ -157,11 +159,34 @@ class DataAgent:
             model: 模型名称，默认使用配置中的模型
             console: Rich Console 实例，用于 Plan Mode 交互
             session_id: 会话 ID，不提供则自动生成
+            multi_agent: 是否启用多 Agent 模式，默认从配置读取
         """
         # 创建会话管理器（会话隔离的关键）
         self._session = SessionManager(session_id=session_id)
 
-        self.agent = create_data_agent(model=model)
+        # 根据配置决定使用单 Agent 还是多 Agent 模式
+        settings = get_settings()
+        use_multi_agent = multi_agent if multi_agent is not None else settings.multi_agent_enabled
+
+        # 子代理回调持有者（仅多 Agent 模式需要）
+        self._subagent_callback_holder = None
+
+        if use_multi_agent:
+            from .multi_agent import create_multi_agent
+            from .middleware import SubAgentCallbackHolder
+
+            # 创建回调持有者，支持动态更新回调
+            self._subagent_callback_holder = SubAgentCallbackHolder()
+
+            self.agent = create_multi_agent(
+                model=model,
+                callback_holder=self._subagent_callback_holder,
+            )
+            self._multi_agent_mode = True
+        else:
+            self.agent = create_data_agent(model=model)
+            self._multi_agent_mode = False
+
         self._messages = []
         self._mode_manager = get_mode_manager()
         self._console = console or Console()
@@ -549,3 +574,30 @@ class DataAgent:
     def list_exports(self) -> list:
         """列出当前会话的所有导出文件"""
         return self._session.list_exports()
+
+    @property
+    def is_multi_agent(self) -> bool:
+        """是否处于多 Agent 模式"""
+        return self._multi_agent_mode
+
+    def set_subagent_callbacks(
+        self,
+        on_tool_call: Optional[Callable[[dict], None]] = None,
+        on_tool_result: Optional[Callable[[dict], None]] = None,
+    ) -> None:
+        """
+        设置子代理回调函数（仅多 Agent 模式有效）
+
+        用于 SSE 流式请求，在请求开始前设置回调，结束后清空。
+
+        Args:
+            on_tool_call: 子代理工具调用开始时的回调
+            on_tool_result: 子代理工具执行完成时的回调
+        """
+        if self._subagent_callback_holder:
+            self._subagent_callback_holder.set_callbacks(on_tool_call, on_tool_result)
+
+    def clear_subagent_callbacks(self) -> None:
+        """清空子代理回调函数"""
+        if self._subagent_callback_holder:
+            self._subagent_callback_holder.clear_callbacks()

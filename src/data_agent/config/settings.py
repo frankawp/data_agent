@@ -72,6 +72,11 @@ class Settings(BaseSettings):
         alias="MAX_ITERATIONS",
         description="Agent最大迭代次数"
     )
+    multi_agent_enabled: bool = Field(
+        default=False,
+        alias="MULTI_AGENT_ENABLED",
+        description="启用多Agent模式（使用subagents进行任务分工）"
+    )
 
     # Compact 配置（基于 token 百分比）
     max_context_tokens: int = Field(

@@ -234,9 +234,43 @@ async def chat_stream(request: ChatRequest):
                 }
             })
 
+        # 子代理工具调用回调（仅多 Agent 模式有效）
+        subagent_step_counter = [0]  # 子代理步骤计数器
+
+        def on_subagent_tool_call(data: dict):
+            """子代理工具调用回调"""
+            subagent_step_counter[0] += 1
+            event_queue.put({
+                "event": "subagent_tool_call",
+                "data": {
+                    "subagent_name": data.get("subagent_name", "unknown"),
+                    "tool_name": data.get("tool_name", "unknown"),
+                    "args": data.get("tool_args", {}),
+                    "step": subagent_step_counter[0],
+                }
+            })
+
+        def on_subagent_tool_result(data: dict):
+            """子代理工具结果回调"""
+            event_queue.put({
+                "event": "subagent_tool_result",
+                "data": {
+                    "subagent_name": data.get("subagent_name", "unknown"),
+                    "tool_name": data.get("tool_name", "unknown"),
+                    "result": data.get("result", ""),
+                    "step": subagent_step_counter[0],
+                }
+            })
+
         def run_chat():
             """在线程中运行聊天"""
             try:
+                # 设置子代理回调（仅多 Agent 模式有效）
+                agent.set_subagent_callbacks(
+                    on_tool_call=on_subagent_tool_call,
+                    on_tool_result=on_subagent_tool_result,
+                )
+
                 response = agent.chat_stream(
                     user_message,
                     on_thinking=on_thinking,
@@ -253,6 +287,8 @@ async def chat_stream(request: ChatRequest):
                     "data": {"error": str(e)}
                 })
             finally:
+                # 清空子代理回调
+                agent.clear_subagent_callbacks()
                 event_queue.put({"event": "done", "data": {}})
 
         # 启动聊天线程
