@@ -19,10 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml README.md ./
 RUN pip install --upgrade pip && pip install .
 
-# 复制源代码和启动脚本
+# 复制源代码
 COPY src/ ./src/
-COPY start.sh ./
-RUN chmod +x start.sh
 
-# 启动命令
-CMD ["./start.sh"]
+# 启动命令 - 使用 /bin/sh 确保环境变量被正确解析
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["exec uvicorn data_agent.api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
