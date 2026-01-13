@@ -4,6 +4,8 @@ FastAPI 后端入口
 提供 Data Agent Web API，使用现有 DataAgent 处理对话。
 """
 
+import os
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,13 +20,20 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS 配置，允许前端访问
+# CORS 配置，支持生产环境动态域名
+# 从环境变量 ALLOWED_ORIGINS 读取，多个域名用逗号分隔
+_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = [o.strip() for o in _origins_env.split(",") if o.strip()]
+if not ALLOWED_ORIGINS:
+    # 默认开发环境域名
+    ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Next.js 开发服务器
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.menv/
+venv/
+.pytest_cache/
+.coverage
+
+# 前端（不需要打包到后端镜像）
+web/
+node_modules/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+
+# 环境文件（运行时通过环境变量注入）
+.env
+.env.*
+
+# 测试
+tests/
+
+# 文档
+docs/
+
+# 其他
+.claude/
+Sandboxfile
