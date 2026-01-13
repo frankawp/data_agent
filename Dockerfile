@@ -19,8 +19,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml README.md ./
 RUN pip install --upgrade pip && pip install .
 
-# 复制源代码
+# 复制源代码和启动脚本
 COPY src/ ./src/
+COPY start.sh ./
+RUN chmod +x start.sh
 
-# 启动命令（使用 Railway 提供的 PORT 环境变量）
-CMD ["sh", "-c", "uvicorn data_agent.api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# 启动命令
+CMD ["./start.sh"]
