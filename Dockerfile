@@ -22,12 +22,8 @@ RUN pip install --upgrade pip && pip install .
 # 复制源代码
 COPY src/ ./src/
 
-# 暴露端口
-EXPOSE 8000
+# 暴露端口（Railway 会动态分配）
+EXPOSE ${PORT:-8000}
 
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-# 启动命令（生产模式）
-CMD ["uvicorn", "data_agent.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 启动命令（使用 Railway 提供的 PORT 环境变量）
+CMD uvicorn data_agent.api.main:app --host 0.0.0.0 --port ${PORT:-8000}
