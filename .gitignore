@@ -56,3 +56,9 @@ htmlcov/
 
 # 本地测试文件（仅根目录）
 /test_sandbox.py
+
+# Web 前端构建产物
+web/.next/
+web/playwright-report/
+web/test-results/
+web/node_modules/
