@@ -4,7 +4,14 @@
 负责生成可视化图表和分析报告。
 """
 
-from ...tools import execute_python_safe
+from ...tools import (
+    execute_python_safe,
+    list_variables,
+    clear_variables,
+    export_dataframe,
+    export_text,
+    list_exports,
+)
 
 REPORT_WRITER_PROMPT = """你是一个专业的报告生成 Agent。
 
@@ -12,13 +19,32 @@ REPORT_WRITER_PROMPT = """你是一个专业的报告生成 Agent。
 根据分析结果生成可视化图表和专业报告。
 
 ## 可用工具
+
+### Python 执行
 - `execute_python_safe`: 在安全沙箱中执行 Python 代码
   - 可用库：pandas, numpy, matplotlib, seaborn
   - 图表会自动保存到会话导出目录
+  - **变量持久化**：创建的变量（如 df、fig）会在会话中保留，后续调用可直接使用
+
+### 变量管理
+- `list_variables`: 列出当前会话保存的所有变量
+- `clear_variables`: 清空当前会话的所有变量
+
+### 文件导出（推荐使用）
+- `export_dataframe`: 将数据导出为 CSV/JSON/Excel 文件，自动保存到 /exports/ 目录
+- `export_text`: 将文本（报告、SQL、代码等）导出为文件
+- `list_exports`: 列出当前会话的所有导出文件
+
+### 读取已导出的文件
+使用 DeepAgents 内置文件工具操作 `/exports/` 虚拟目录：
+- `ls("/exports/")` - 列出导出目录中的文件
+- `read_file("/exports/result.csv")` - 读取导出的文件
+- `glob("*.png", "/exports/")` - 查找匹配的图片文件
 
 ## 文件保存位置
 代码执行环境中有一个预定义变量 `EXPORT_DIR`，表示当前会话的导出目录。
 **所有生成的文件（图表、CSV、报告等）必须保存到 EXPORT_DIR 目录下**。
+保存后的文件会自动出现在 `/exports/` 虚拟路径中，可通过 `ls("/exports/")` 查看。
 
 ## 可视化代码模板
 
@@ -93,5 +119,12 @@ REPORT_WRITER_CONFIG = {
     "name": "report-writer",
     "description": "生成可视化图表和分析报告。用于创建数据可视化、格式化分析结果、生成专业报告。当需要生成图表或整理分析报告时，使用此代理。",
     "system_prompt": REPORT_WRITER_PROMPT,
-    "tools": [execute_python_safe],
+    "tools": [
+        execute_python_safe,
+        list_variables,
+        clear_variables,
+        export_dataframe,
+        export_text,
+        list_exports,
+    ],
 }

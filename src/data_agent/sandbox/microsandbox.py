@@ -6,9 +6,11 @@ MicroSandbox安全沙箱封装
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
+from types import ModuleType
 
 from ..config.settings import get_settings
 from ..session import get_current_session
@@ -214,6 +216,12 @@ class DataAgentSandbox:
         import os
         restricted_globals["os"] = os
 
+        # 从会话中注入已保存的变量（变量持久化）
+        if self._session:
+            session_context = self._session.get_execution_context()
+            restricted_globals.update(session_context)
+            logger.debug(f"注入会话变量: {list(session_context.keys())}")
+
         # 预加载常用数据分析库
         try:
             import pandas as pd
@@ -247,6 +255,10 @@ class DataAgentSandbox:
             output = stdout_capture.getvalue()
             error = stderr_capture.getvalue()
 
+            # 提取并保存用户变量到会话（变量持久化）
+            if self._session:
+                self._save_user_variables(restricted_globals)
+
             return ExecutionResult(
                 success=True,
                 output=output,
@@ -261,6 +273,59 @@ class DataAgentSandbox:
                 error=str(e),
                 execution_time=time.time() - start_time
             )
+
+    def _save_user_variables(self, namespace: Dict[str, Any]) -> None:
+        """
+        从执行命名空间中提取用户变量并保存到会话
+
+        Args:
+            namespace: 代码执行后的命名空间
+        """
+        # 需要排除的系统变量和预加载模块
+        excluded_names = {
+            # 内置变量
+            "__builtins__", "__name__", "__doc__", "__package__",
+            "__loader__", "__spec__", "__annotations__", "__cached__",
+            # 预加载模块
+            "pd", "pandas", "np", "numpy", "os", "scipy", "stats", "sklearn",
+            # 注入变量
+            "EXPORT_DIR",
+        }
+
+        # 允许保存的类型
+        allowed_types = (
+            int, float, str, bool, list, dict, tuple, set,
+        )
+
+        # 尝试添加 pandas/numpy 类型
+        try:
+            import pandas as pd
+            import numpy as np
+            allowed_types = allowed_types + (pd.DataFrame, pd.Series, np.ndarray)
+        except ImportError:
+            pass
+
+        user_variables = {}
+        for name, value in namespace.items():
+            # 跳过私有变量
+            if name.startswith("_"):
+                continue
+            # 跳过系统变量
+            if name in excluded_names:
+                continue
+            # 跳过模块类型
+            if isinstance(value, ModuleType):
+                continue
+            # 跳过函数和类
+            if callable(value) and not isinstance(value, type):
+                continue
+            # 只保存允许的类型
+            if isinstance(value, allowed_types):
+                user_variables[name] = value
+
+        if user_variables and self._session:
+            self._session.update_execution_context(user_variables)
+            logger.debug(f"保存用户变量: {list(user_variables.keys())}")
 
     async def execute_with_data(
         self,

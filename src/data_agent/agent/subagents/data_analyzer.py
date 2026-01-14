@@ -6,6 +6,11 @@
 
 from ...tools import (
     execute_python_safe,
+    list_variables,
+    clear_variables,
+    export_dataframe,
+    export_text,
+    list_exports,
     train_model,
     predict,
     list_models,
@@ -27,6 +32,22 @@ DATA_ANALYZER_PROMPT = """你是一个专业的数据分析 Agent。
   - 使用 `print()` 输出结果
   - 适合：数据处理、统计计算、自定义分析
   - 环境中有 `EXPORT_DIR` 变量，保存文件时使用该目录
+  - **变量持久化**：创建的变量（如 df、result）会在会话中保留，后续调用可直接使用
+
+### 变量管理
+- `list_variables`: 列出当前会话保存的所有变量
+- `clear_variables`: 清空当前会话的所有变量
+
+### 文件导出（推荐使用）
+- `export_dataframe`: 将数据导出为 CSV/JSON/Excel 文件，自动保存到 /exports/ 目录
+- `export_text`: 将文本导出为文件
+- `list_exports`: 列出当前会话的所有导出文件
+
+### 读取已导出的文件
+使用 DeepAgents 内置文件工具操作 `/exports/` 虚拟目录：
+- `ls("/exports/")` - 列出导出目录中的文件
+- `read_file("/exports/result.csv")` - 读取导出的文件
+- `glob("*.csv", "/exports/")` - 查找匹配的文件
 
 ### 机器学习
 - `train_model`: 训练机器学习模型
@@ -51,6 +72,7 @@ DATA_ANALYZER_PROMPT = """你是一个专业的数据分析 Agent。
 ```python
 import pandas as pd
 import numpy as np
+import os
 from scipy import stats
 
 # 假设 data 是已有的数据（JSON 格式）
@@ -66,6 +88,11 @@ print(df.corr())
 # 假设检验
 t_stat, p_value = stats.ttest_ind(group1, group2)
 print(f"T统计量: {t_stat}, P值: {p_value}")
+
+# 保存文件到导出目录（会自动出现在 /exports/ 虚拟路径中）
+filepath = os.path.join(EXPORT_DIR, 'analysis_result.csv')
+df.to_csv(filepath, index=False)
+print(f"文件已保存: {filepath}")
 ```
 
 ## 输出格式
@@ -87,6 +114,11 @@ DATA_ANALYZER_CONFIG = {
     "system_prompt": DATA_ANALYZER_PROMPT,
     "tools": [
         execute_python_safe,
+        list_variables,
+        clear_variables,
+        export_dataframe,
+        export_text,
+        list_exports,
         train_model,
         predict,
         list_models,

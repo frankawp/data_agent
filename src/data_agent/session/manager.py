@@ -9,7 +9,7 @@ import shutil
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,9 @@ class SessionManager:
         # 沙箱可用状态（会话级别）
         self._sandbox_unavailable = False
         self._sandbox_error: Optional[str] = None
+
+        # Python 执行上下文（变量持久化）
+        self._execution_context: Dict[str, Any] = {}
 
         # 创建会话目录
         self._create_session_dirs()
@@ -163,6 +166,28 @@ class SessionManager:
             错误信息，如果沙箱可用则返回 None
         """
         return self._sandbox_error
+
+    def get_execution_context(self) -> Dict[str, Any]:
+        """
+        获取 Python 执行上下文
+
+        Returns:
+            包含已保存变量的字典
+        """
+        return self._execution_context
+
+    def update_execution_context(self, variables: Dict[str, Any]) -> None:
+        """
+        更新 Python 执行上下文
+
+        Args:
+            variables: 要保存的变量字典
+        """
+        self._execution_context.update(variables)
+
+    def clear_execution_context(self) -> None:
+        """清空 Python 执行上下文"""
+        self._execution_context.clear()
 
     def get_export_path(self, filename: str) -> Path:
         """

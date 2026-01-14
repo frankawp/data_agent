@@ -15,11 +15,15 @@
     "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@assistant-ui/react": "^0.11.53",
+    "@assistant-ui/react-markdown": "^0.11.9",
     "@copilotkit/react-core": "^1.50.1",
     "@copilotkit/react-ui": "^1.50.1",
+    "assistant-stream": "^0.2.46",
     "next": "16.1.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",

@@ -10,6 +10,7 @@ from typing import Optional
 from deepagents import create_deep_agent
 from langgraph.graph.state import CompiledStateGraph
 
+from .backend import create_session_backend
 from .llm import create_llm
 from .middleware import SubAgentToolMonitor, SubAgentCallbackHolder
 from .subagents import (
@@ -27,6 +28,18 @@ COORDINATOR_PROMPT = """你是一个数据分析任务的协调者。
 2. 将任务分配给合适的专业子代理
 3. 汇总各子代理的结果
 4. 向用户提供清晰的最终答案
+
+## 文件系统说明
+
+你和子代理可以使用以下虚拟路径访问会话文件：
+
+- `/exports/` - 导出文件目录，所有导出的 CSV、图表等文件都在这里
+- `/workspace/` - 工作目录，临时文件和中间结果
+
+**常用操作**：
+- `ls("/exports/")` - 列出所有导出文件
+- `read_file("/exports/result.csv")` - 读取导出的 CSV 文件
+- `glob("*.csv", "/exports/")` - 查找所有 CSV 文件
 
 ## 可用子代理
 
@@ -128,11 +141,12 @@ def create_multi_agent(
         add_monitor(REPORT_WRITER_CONFIG),
     ]
 
-    # 创建多 Agent
+    # 创建多 Agent，传入会话后端
     agent = create_deep_agent(
         model=llm,
         system_prompt=system_prompt or COORDINATOR_PROMPT,
         subagents=subagents,
+        backend=create_session_backend,  # 使用会话后端工厂函数
     )
 
     return agent
