@@ -167,6 +167,14 @@ class DataAgentSandbox:
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
 
+        # 创建 /exports 和 /workspace symlink，让虚拟路径在 Python 代码中也能工作
+        # 这样 AI 从 ls("/exports/") 看到的路径可以直接在 Python 代码中使用
+        symlinks_created = self._ensure_virtual_path_symlinks()
+
+        # 如果 symlink 创建失败（权限不足），则在代码中替换虚拟路径为实际路径
+        if not symlinks_created:
+            code = self._replace_virtual_paths(code)
+
         # 创建受限的全局命名空间
         restricted_globals = {
             "__builtins__": {
@@ -353,6 +361,89 @@ class DataAgentSandbox:
 
         full_code = "\n".join(data_setup) + "\n" + code
         return await self.execute(full_code)
+
+    def _ensure_virtual_path_symlinks(self) -> bool:
+        """
+        创建虚拟路径的 symlink，让 /exports/ 和 /workspace/ 在 Python 代码中可用
+
+        这样 AI 从 ls("/exports/") 看到的路径（如 /exports/result.csv）
+        可以直接在 Python 代码中使用（如 pd.read_csv("/exports/result.csv")）
+
+        Returns:
+            bool: 如果所有 symlink 都创建成功或已存在，返回 True；否则返回 False
+        """
+        # 定义虚拟路径到实际路径的映射
+        virtual_paths = {
+            Path("/exports"): self.export_dir,
+            Path("/workspace"): self.workspace_dir,
+        }
+
+        all_success = True
+        for virtual_path, actual_path in virtual_paths.items():
+            try:
+                # 确保实际目录存在
+                actual_path.mkdir(parents=True, exist_ok=True)
+
+                # 如果虚拟路径已经指向正确位置，跳过
+                if virtual_path.exists():
+                    if virtual_path.is_symlink():
+                        if virtual_path.resolve() == actual_path.resolve():
+                            continue  # symlink 已正确指向
+                        # symlink 指向错误位置，更新它
+                        virtual_path.unlink()
+                        virtual_path.symlink_to(actual_path)
+                        logger.debug(f"更新 symlink: {virtual_path} -> {actual_path}")
+                    else:
+                        # 是真实目录，不做任何操作（避免破坏系统目录）
+                        all_success = False
+                        continue
+                else:
+                    # 虚拟路径不存在，创建 symlink
+                    virtual_path.symlink_to(actual_path)
+                    logger.debug(f"创建 symlink: {virtual_path} -> {actual_path}")
+
+            except PermissionError:
+                # 没有权限创建根级别 symlink，这在大多数系统上是正常的
+                logger.debug(f"无法创建 {virtual_path} symlink（权限不足），将使用路径替换")
+                all_success = False
+            except Exception as e:
+                logger.warning(f"创建 symlink {virtual_path} 时出错: {e}")
+                all_success = False
+
+        return all_success
+
+    def _replace_virtual_paths(self, code: str) -> str:
+        """
+        在代码中将虚拟路径替换为实际路径
+
+        当无法创建 symlink 时，作为回退方案使用。
+
+        Args:
+            code: 原始 Python 代码
+
+        Returns:
+            str: 替换虚拟路径后的代码
+        """
+        import re
+
+        # 替换 /exports/ 路径
+        # 匹配模式如: '/exports/filename.csv', "/exports/filename.csv"
+        exports_pattern = r'''(['"])/exports/'''
+        code = re.sub(
+            exports_pattern,
+            rf'\1{str(self.export_dir)}/',
+            code
+        )
+
+        # 替换 /workspace/ 路径
+        workspace_pattern = r'''(['"])/workspace/'''
+        code = re.sub(
+            workspace_pattern,
+            rf'\1{str(self.workspace_dir)}/',
+            code
+        )
+
+        return code
 
     def get_export_path(self, filename: str) -> Path:
         """
