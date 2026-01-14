@@ -47,14 +47,20 @@ DATA_AGENT_PROMPT = """你是一个专业的数据分析 Agent，专门帮助用
 - `execute_python_safe`: 在安全沙箱中执行 Python 代码
   - 可用库：pandas, numpy, scipy, sklearn, networkx, matplotlib, seaborn
   - 使用 print() 输出结果
+  - 环境中有 `EXPORT_DIR` 变量，保存文件（图表、CSV等）时必须使用该目录
   - 示例：
     ```python
     import pandas as pd
     import numpy as np
+    import os
     from sklearn.cluster import KMeans
 
     # 数据处理和分析代码
     print(result)
+
+    # 保存文件示例
+    # df.to_csv(os.path.join(EXPORT_DIR, 'result.csv'))
+    # plt.savefig(os.path.join(EXPORT_DIR, 'chart.png'))
     ```
 
 ### 机器学习工具

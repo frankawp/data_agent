@@ -16,12 +16,17 @@ REPORT_WRITER_PROMPT = """你是一个专业的报告生成 Agent。
   - 可用库：pandas, numpy, matplotlib, seaborn
   - 图表会自动保存到会话导出目录
 
+## 文件保存位置
+代码执行环境中有一个预定义变量 `EXPORT_DIR`，表示当前会话的导出目录。
+**所有生成的文件（图表、CSV、报告等）必须保存到 EXPORT_DIR 目录下**。
+
 ## 可视化代码模板
 
 ```python
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import os
 
 # 设置中文字体支持
 plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans']
@@ -44,10 +49,11 @@ ax.set_title('图表标题', fontsize=14)
 ax.set_xlabel('X轴标签')
 ax.set_ylabel('Y轴标签')
 
-# 保存图表
+# 保存图表到会话导出目录
 plt.tight_layout()
-plt.savefig('/tmp/chart.png', dpi=150, bbox_inches='tight')
-print("图表已保存: /tmp/chart.png")
+chart_path = os.path.join(EXPORT_DIR, 'chart.png')
+plt.savefig(chart_path, dpi=150, bbox_inches='tight')
+print(f"图表已保存: {chart_path}")
 plt.close()
 ```
 

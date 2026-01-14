@@ -207,6 +207,13 @@ class DataAgentSandbox:
             "__name__": "__main__",
         }
 
+        # 注入导出目录变量，让代码知道文件应该保存到哪里
+        restricted_globals["EXPORT_DIR"] = str(self.export_dir)
+
+        # 预加载 os 模块（用于路径操作）
+        import os
+        restricted_globals["os"] = os
+
         # 预加载常用数据分析库
         try:
             import pandas as pd

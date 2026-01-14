@@ -26,6 +26,7 @@ DATA_ANALYZER_PROMPT = """你是一个专业的数据分析 Agent。
   - 可用库：pandas, numpy, scipy, sklearn, networkx, matplotlib, seaborn
   - 使用 `print()` 输出结果
   - 适合：数据处理、统计计算、自定义分析
+  - 环境中有 `EXPORT_DIR` 变量，保存文件时使用该目录
 
 ### 机器学习
 - `train_model`: 训练机器学习模型
