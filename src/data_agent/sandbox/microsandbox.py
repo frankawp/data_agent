@@ -241,6 +241,28 @@ class DataAgentSandbox:
         except ImportError:
             pass
 
+        # 预加载 matplotlib，使用非交互式后端（解决非主线程问题）
+        try:
+            import matplotlib
+            # 使用 Agg 后端，避免 "Cannot create a GUI FigureManager outside the main thread" 错误
+            matplotlib.use('Agg', force=True)
+            import matplotlib.pyplot as plt
+            plt.switch_backend('Agg')  # 确保切换到 Agg 后端
+            restricted_globals["matplotlib"] = matplotlib
+            restricted_globals["plt"] = plt
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning(f"设置 matplotlib 后端失败: {e}")
+
+        # 预加载 seaborn
+        try:
+            import seaborn as sns
+            restricted_globals["sns"] = sns
+            restricted_globals["seaborn"] = sns
+        except ImportError:
+            pass
+
         try:
             import scipy
             from scipy import stats
