@@ -1,24 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { ModeControl } from "./modes/ModeControl";
-
-interface SessionInfo {
-  session_id: string;
-  export_dir: string;
-}
+import { useSession } from "@/providers/SessionProvider";
 
 export function Header() {
-  const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
+  const { sessionId, resetSession, isLoading } = useSession();
   const [showModes, setShowModes] = useState(false);
 
-  useEffect(() => {
-    // 获取会话信息
-    fetch("/api/sessions")
-      .then((r) => r.json())
-      .then(setSessionInfo)
-      .catch(() => {});
-  }, []);
+  const handleNewSession = async () => {
+    if (confirm("确定要开启新会话吗？当前会话的数据将被保留，但您将切换到一个全新的会话。")) {
+      await resetSession();
+      window.location.reload();
+    }
+  };
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-white px-4">
@@ -32,10 +27,20 @@ export function Header() {
 
       {/* 会话信息 */}
       <div className="flex items-center gap-4">
-        {sessionInfo && (
-          <span className="text-sm text-gray-500">
-            会话: {sessionInfo.session_id.slice(-8)}
-          </span>
+        {sessionId && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">
+              会话: {sessionId.slice(-8)}
+            </span>
+            <button
+              onClick={handleNewSession}
+              disabled={isLoading}
+              className="rounded px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+              title="开启新会话"
+            >
+              新建
+            </button>
+          </div>
         )}
 
         {/* 数据库状态 */}

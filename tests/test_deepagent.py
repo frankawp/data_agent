@@ -16,11 +16,6 @@ class TestDataAgentImport:
         from data_agent.agent import DataAgent
         assert DataAgent is not None
 
-    def test_import_create_data_agent(self):
-        """测试 create_data_agent 函数导入"""
-        from data_agent.agent import create_data_agent
-        assert create_data_agent is not None
-
     def test_import_version(self):
         """测试版本号"""
         from data_agent import __version__
@@ -95,15 +90,6 @@ class TestSQLTools:
 
 class TestDataAgentCreation:
     """测试 DataAgent 创建"""
-
-    def test_create_data_agent(self):
-        """测试创建 DataAgent 函数"""
-        from data_agent.agent import create_data_agent
-
-        agent = create_data_agent()
-        assert agent is not None
-        # 验证是 CompiledStateGraph 类型
-        assert hasattr(agent, "invoke")
 
     def test_data_agent_class(self):
         """测试 DataAgent 类实例化"""

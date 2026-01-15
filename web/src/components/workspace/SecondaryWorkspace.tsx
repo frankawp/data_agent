@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useWorkspace, SecondaryContent } from "@/hooks/useWorkspaceContext";
 
 interface SecondaryWorkspaceProps {
@@ -10,31 +10,33 @@ interface SecondaryWorkspaceProps {
 export function SecondaryWorkspace({ content }: SecondaryWorkspaceProps) {
   const { setActiveTab } = useWorkspace();
 
-  if (!content) {
-    return (
-      <div className="flex h-full items-center justify-center text-gray-400">
-        <p>点击左侧边栏项目查看详情</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="h-full overflow-auto bg-white p-4">
-      {/* 返回按钮 */}
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-medium text-gray-900">
-          {getContentTitle(content)}
-        </h2>
-        <button
-          onClick={() => setActiveTab("main")}
-          className="rounded border px-3 py-1 text-sm text-gray-600 hover:bg-gray-50"
-        >
-          返回主工作区
-        </button>
+    <div className="flex h-full flex-col bg-white">
+      {/* 内容区域 */}
+      <div className="flex-1 overflow-auto p-4">
+        {content ? (
+          <>
+            {/* 标题和返回按钮 */}
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-medium text-gray-900">
+                {getContentTitle(content)}
+              </h2>
+              <button
+                onClick={() => setActiveTab("main")}
+                className="rounded border px-3 py-1 text-sm text-gray-600 hover:bg-gray-50"
+              >
+                返回主工作区
+              </button>
+            </div>
+            {/* 根据类型渲染内容 */}
+            <ContentRenderer content={content} />
+          </>
+        ) : (
+          <div className="flex h-full items-center justify-center text-gray-400">
+            <p>点击左侧边栏项目查看详情</p>
+          </div>
+        )}
       </div>
-
-      {/* 根据类型渲染内容 */}
-      <ContentRenderer content={content} />
     </div>
   );
 }

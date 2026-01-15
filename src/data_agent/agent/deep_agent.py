@@ -3,142 +3,22 @@ DeepAgent 数据分析实现
 
 基于 DeepAgents 框架构建的数据分析 Agent。
 支持会话隔离，每个会话拥有独立的沙箱和导出目录。
+使用多 Agent 模式（subagents）进行任务分工。
 """
 
 from typing import Optional, Callable
 
-from deepagents import create_deep_agent
 from langchain_core.messages import AIMessage, ToolMessage
-from langgraph.graph.state import CompiledStateGraph
 from rich.console import Console
-from rich.prompt import Confirm
 
 from ..config.settings import get_settings
-from ..config.modes import get_mode_manager, PlanModeValue
+from ..config.modes import get_mode_manager
 from ..session import SessionManager
 from .plan_executor import PlanExecutor, StepStatus
 from .llm import create_llm
 from .compactor import ConversationCompactor
-from ..tools import (
-    execute_sql,
-    list_tables,
-    describe_table,
-    execute_python_safe,
-    train_model,
-    predict,
-    list_models,
-    create_graph,
-    graph_analysis,
-    list_graphs,
-)
-
-
-# 数据分析专用系统提示
-DATA_AGENT_PROMPT = """你是一个专业的数据分析 Agent，专门帮助用户进行数据查询、分析和可视化。
-
-## 可用工具
-
-### SQL 数据库工具
-- `list_tables`: 列出数据库中的所有表
-- `describe_table`: 获取指定表的结构信息
-- `execute_sql`: 执行 SQL 查询（仅支持 SELECT）
-
-### Python 执行工具
-- `execute_python_safe`: 在安全沙箱中执行 Python 代码
-  - 可用库：pandas, numpy, scipy, sklearn, networkx, matplotlib, seaborn
-  - 使用 print() 输出结果
-  - 环境中有 `EXPORT_DIR` 变量，保存文件（图表、CSV等）时必须使用该目录
-  - 示例：
-    ```python
-    import pandas as pd
-    import numpy as np
-    import os
-    from sklearn.cluster import KMeans
-
-    # 数据处理和分析代码
-    print(result)
-
-    # 保存文件示例
-    # df.to_csv(os.path.join(EXPORT_DIR, 'result.csv'))
-    # plt.savefig(os.path.join(EXPORT_DIR, 'chart.png'))
-    ```
-
-### 机器学习工具
-- `train_model`: 训练机器学习模型（分类、回归、聚类）
-- `predict`: 使用训练好的模型进行预测
-- `list_models`: 列出所有已训练的模型
-
-### 图分析工具
-- `create_graph`: 创建图结构
-- `graph_analysis`: 执行图算法分析（中心性、社区发现、PageRank 等）
-- `list_graphs`: 列出所有已创建的图
-
-## 工作流程
-
-1. **理解需求**: 仔细理解用户的数据分析需求
-2. **获取数据**: 使用 SQL 工具查询数据库获取数据
-3. **分析数据**: 使用 `execute_python_safe` 执行 Python 代码进行数据分析
-4. **高级分析**: 需要时使用机器学习或图分析工具
-5. **汇总结果**: 将分析结果清晰呈现给用户
-
-## 重要提示
-
-- 获取数据后，**务必使用 `execute_python_safe` 进行数据分析**
-- Python 代码中可以使用 pandas、numpy、scipy、sklearn 等库
-- 分析结果通过 print() 输出
-- 对于复杂任务，先规划步骤再执行
-"""
-
-
-def create_data_agent(
-    model: Optional[str] = None,
-    system_prompt: Optional[str] = None,
-) -> CompiledStateGraph:
-    """
-    创建数据分析 DeepAgent
-
-    Args:
-        model: 模型名称，默认使用配置中的模型
-        system_prompt: 自定义系统提示，默认使用数据分析专用提示
-
-    Returns:
-        CompiledStateGraph: 编译后的 Agent 图
-    """
-    # 初始化模型
-    if model is None:
-        # 使用配置中的模型
-        llm = create_llm()
-    elif isinstance(model, str):
-        llm = create_llm(model=model)
-    else:
-        llm = model
-
-    # 定义工具列表
-    tools = [
-        # SQL 工具
-        execute_sql,
-        list_tables,
-        describe_table,
-        # Python 执行工具
-        execute_python_safe,
-        # 机器学习工具
-        train_model,
-        predict,
-        list_models,
-        # 图分析工具
-        create_graph,
-        graph_analysis,
-        list_graphs,
-    ]
-
-    # 创建 DeepAgent
-    agent = create_deep_agent(
-        model=llm,
-        tools=tools,
-        system_prompt=system_prompt or DATA_AGENT_PROMPT,
-    )
-
-    return agent
+from .multi_agent import create_multi_agent
+from .middleware import SubAgentCallbackHolder
 
 
 class DataAgent:
@@ -148,7 +28,7 @@ class DataAgent:
     提供更简洁的接口来使用 DeepAgent。
     支持运行时模式切换（Plan Mode、Auto Execute 等）。
     支持会话隔离，每个会话拥有独立的沙箱和导出目录。
-    支持多 Agent 模式（使用 subagents 进行任务分工）。
+    使用多 Agent 模式（subagents）进行任务分工。
     """
 
     def __init__(
@@ -156,7 +36,6 @@ class DataAgent:
         model: Optional[str] = None,
         console: Optional[Console] = None,
         session_id: Optional[str] = None,
-        multi_agent: Optional[bool] = None,
     ):
         """
         初始化数据分析 Agent
@@ -165,33 +44,18 @@ class DataAgent:
             model: 模型名称，默认使用配置中的模型
             console: Rich Console 实例，用于 Plan Mode 交互
             session_id: 会话 ID，不提供则自动生成
-            multi_agent: 是否启用多 Agent 模式，默认从配置读取
         """
         # 创建会话管理器（会话隔离的关键）
         self._session = SessionManager(session_id=session_id)
 
-        # 根据配置决定使用单 Agent 还是多 Agent 模式
-        settings = get_settings()
-        use_multi_agent = multi_agent if multi_agent is not None else settings.multi_agent_enabled
+        # 创建回调持有者，支持动态更新回调
+        self._subagent_callback_holder = SubAgentCallbackHolder()
 
-        # 子代理回调持有者（仅多 Agent 模式需要）
-        self._subagent_callback_holder = None
-
-        if use_multi_agent:
-            from .multi_agent import create_multi_agent
-            from .middleware import SubAgentCallbackHolder
-
-            # 创建回调持有者，支持动态更新回调
-            self._subagent_callback_holder = SubAgentCallbackHolder()
-
-            self.agent = create_multi_agent(
-                model=model,
-                callback_holder=self._subagent_callback_holder,
-            )
-            self._multi_agent_mode = True
-        else:
-            self.agent = create_data_agent(model=model)
-            self._multi_agent_mode = False
+        # 创建多 Agent
+        self.agent = create_multi_agent(
+            model=model,
+            callback_holder=self._subagent_callback_holder,
+        )
 
         self._messages = []
         self._mode_manager = get_mode_manager()
@@ -581,18 +445,13 @@ class DataAgent:
         """列出当前会话的所有导出文件"""
         return self._session.list_exports()
 
-    @property
-    def is_multi_agent(self) -> bool:
-        """是否处于多 Agent 模式"""
-        return self._multi_agent_mode
-
     def set_subagent_callbacks(
         self,
         on_tool_call: Optional[Callable[[dict], None]] = None,
         on_tool_result: Optional[Callable[[dict], None]] = None,
     ) -> None:
         """
-        设置子代理回调函数（仅多 Agent 模式有效）
+        设置子代理回调函数
 
         用于 SSE 流式请求，在请求开始前设置回调，结束后清空。
 

@@ -16,10 +16,26 @@ logger = logging.getLogger(__name__)
 # 全局会话实例
 _current_session: Optional["SessionManager"] = None
 
+# 会话注册表：session_id -> SessionManager
+_session_registry: Dict[str, "SessionManager"] = {}
+
 
 def get_current_session() -> Optional["SessionManager"]:
     """获取当前会话实例"""
     return _current_session
+
+
+def get_session_by_id(session_id: str) -> Optional["SessionManager"]:
+    """
+    根据 session_id 获取会话实例
+
+    Args:
+        session_id: 会话 ID
+
+    Returns:
+        SessionManager 实例，如果不存在则返回 None
+    """
+    return _session_registry.get(session_id)
 
 
 class SessionManager:
@@ -69,6 +85,10 @@ class SessionManager:
         # 设置为当前会话
         global _current_session
         _current_session = self
+
+        # 注册到会话注册表
+        global _session_registry
+        _session_registry[self.session_id] = self
 
         logger.info(f"会话已创建: {self.session_id}")
         logger.debug(f"导出目录: {self.export_dir}")
@@ -232,7 +252,7 @@ class SessionManager:
 
         删除会话目录及所有内容。
         """
-        global _current_session
+        global _current_session, _session_registry
 
         if self.session_dir.exists():
             shutil.rmtree(self.session_dir)
@@ -240,6 +260,10 @@ class SessionManager:
 
         if _current_session is self:
             _current_session = None
+
+        # 从注册表移除
+        if self.session_id in _session_registry:
+            del _session_registry[self.session_id]
 
     def __enter__(self) -> "SessionManager":
         """上下文管理器入口"""

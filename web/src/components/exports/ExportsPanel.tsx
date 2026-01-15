@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "@/providers/SessionProvider";
 
 // 文件类型
 interface ExportFile {
@@ -85,6 +86,7 @@ function getFileTypeLabel(filename: string): string {
 }
 
 export function ExportsPanel() {
+  const { sessionId } = useSession();
   const [files, setFiles] = useState<ExportFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +100,11 @@ export function ExportsPanel() {
     setError(null);
 
     try {
-      const res = await fetch("/api/sessions/exports");
+      // 使用 session_id 参数获取指定会话的导出文件
+      const url = sessionId
+        ? `/api/sessions/exports?session_id=${sessionId}`
+        : "/api/sessions/exports";
+      const res = await fetch(url);
       if (!res.ok) {
         throw new Error("获取导出文件失败");
       }
@@ -109,7 +115,7 @@ export function ExportsPanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sessionId]);
 
   useEffect(() => {
     fetchExports();
@@ -125,7 +131,11 @@ export function ExportsPanel() {
     setPreview(null);
 
     try {
-      const res = await fetch(`/api/sessions/exports/${file.name}/preview`);
+      // 传递 session_id 参数
+      const url = sessionId
+        ? `/api/sessions/exports/${file.name}/preview?session_id=${sessionId}`
+        : `/api/sessions/exports/${file.name}/preview`;
+      const res = await fetch(url);
       if (!res.ok) {
         throw new Error("预览失败");
       }
@@ -140,7 +150,11 @@ export function ExportsPanel() {
 
   // 下载文件
   const handleDownload = (file: ExportFile) => {
-    window.open(`/api/sessions/exports/${file.name}/download`, "_blank");
+    // 传递 session_id 参数
+    const url = sessionId
+      ? `/api/sessions/exports/${file.name}/download?session_id=${sessionId}`
+      : `/api/sessions/exports/${file.name}/download`;
+    window.open(url, "_blank");
   };
 
   // 刷新列表

@@ -10,17 +10,28 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from ...session import SessionManager, get_current_session as get_global_session
+from ...session import SessionManager, get_current_session as get_global_session, get_session_by_id
 
 router = APIRouter()
 
 
-def get_current_session() -> SessionManager:
+def get_current_session(session_id: str = None) -> SessionManager:
     """
-    获取当前会话
+    获取会话
 
-    优先使用全局会话（由 DataAgent 创建），如果不存在则创建新会话。
+    Args:
+        session_id: 可选的会话 ID。如果提供，返回指定的会话；否则返回全局会话。
+
+    Returns:
+        SessionManager 实例
     """
+    # 如果提供了 session_id，尝试获取指定会话
+    if session_id:
+        session = get_session_by_id(session_id)
+        if session:
+            return session
+
+    # 回退到全局会话
     session = get_global_session()
     if session is None:
         # 创建新会话（这会自动设置为全局会话）
@@ -43,11 +54,14 @@ async def get_session_info() -> Dict[str, Any]:
 
 
 @router.get("/exports")
-async def get_exports() -> Dict[str, Any]:
+async def get_exports(session_id: str = None) -> Dict[str, Any]:
     """
-    获取当前会话的导出文件列表
+    获取指定会话的导出文件列表
+
+    Args:
+        session_id: 可选的会话 ID。如果提供，返回指定会话的导出文件；否则返回全局会话的导出文件。
     """
-    session = get_current_session()
+    session = get_current_session(session_id)
     exports = session.list_exports()
 
     return {
@@ -66,7 +80,7 @@ async def get_exports() -> Dict[str, Any]:
 
 
 @router.get("/exports/{filename}/preview")
-async def preview_export(filename: str) -> Dict[str, Any]:
+async def preview_export(filename: str, session_id: str = None) -> Dict[str, Any]:
     """
     预览导出文件内容
 
@@ -78,8 +92,9 @@ async def preview_export(filename: str) -> Dict[str, Any]:
 
     Args:
         filename: 文件名
+        session_id: 可选的会话 ID
     """
-    session = get_current_session()
+    session = get_current_session(session_id)
     file_path = session.export_dir / filename
 
     if not file_path.exists():
@@ -144,14 +159,15 @@ async def preview_export(filename: str) -> Dict[str, Any]:
 
 
 @router.get("/exports/{filename}/download")
-async def download_export(filename: str):
+async def download_export(filename: str, session_id: str = None):
     """
     下载导出文件
 
     Args:
         filename: 文件名
+        session_id: 可选的会话 ID
     """
-    session = get_current_session()
+    session = get_current_session(session_id)
     file_path = session.export_dir / filename
 
     if not file_path.exists():

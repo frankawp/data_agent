@@ -12,21 +12,8 @@ interface TableInfo {
   type: "table" | "view";
 }
 
-interface ModelInfo {
-  id: string;
-  type: string;
-}
-
-interface ExportFile {
-  name: string;
-  path: string;
-  size: number;
-}
-
 export function Sidebar({ className }: SidebarProps) {
   const [tables, setTables] = useState<TableInfo[]>([]);
-  const [models, setModels] = useState<ModelInfo[]>([]);
-  const [exports, setExports] = useState<ExportFile[]>([]);
   const [expandedSections, setExpandedSections] = useState<string[]>([
     "database",
   ]);
@@ -59,18 +46,6 @@ export function Sidebar({ className }: SidebarProps) {
       .catch(() => {});
   }, []);
 
-  // 加载导出文件
-  useEffect(() => {
-    fetch("/api/sessions/exports")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.files) {
-          setExports(data.files);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
   const toggleSection = (section: string) => {
     setExpandedSections((prev) =>
       prev.includes(section)
@@ -83,22 +58,6 @@ export function Sidebar({ className }: SidebarProps) {
     setSecondaryContent({
       type: "table",
       data: { tableName },
-    });
-    setActiveTab("secondary");
-  };
-
-  const handleModelClick = (modelId: string) => {
-    setSecondaryContent({
-      type: "model",
-      data: { modelId },
-    });
-    setActiveTab("secondary");
-  };
-
-  const handleExportClick = (file: ExportFile) => {
-    setSecondaryContent({
-      type: "export",
-      data: { name: file.name, path: file.path, size: file.size },
     });
     setActiveTab("secondary");
   };
@@ -138,69 +97,6 @@ export function Sidebar({ className }: SidebarProps) {
           )}
         </div>
 
-        {/* 已训练模型 */}
-        <div className="mb-4">
-          <button
-            onClick={() => toggleSection("models")}
-            className="flex w-full items-center justify-between py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
-          >
-            <span className="flex items-center gap-2">
-              <span>🧠</span>
-              已训练模型
-            </span>
-            <span>{expandedSections.includes("models") ? "▼" : "▶"}</span>
-          </button>
-          {expandedSections.includes("models") && (
-            <div className="ml-4 space-y-1">
-              {models.length === 0 ? (
-                <p className="text-xs text-gray-400">暂无模型</p>
-              ) : (
-                models.map((model) => (
-                  <button
-                    key={model.id}
-                    onClick={() => handleModelClick(model.id)}
-                    className="flex w-full items-center gap-2 rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
-                  >
-                    <span>📈</span>
-                    {model.id}
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* 导出文件 */}
-        <div className="mb-4">
-          <button
-            onClick={() => toggleSection("exports")}
-            className="flex w-full items-center justify-between py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
-          >
-            <span className="flex items-center gap-2">
-              <span>📁</span>
-              导出文件
-            </span>
-            <span>{expandedSections.includes("exports") ? "▼" : "▶"}</span>
-          </button>
-          {expandedSections.includes("exports") && (
-            <div className="ml-4 space-y-1">
-              {exports.length === 0 ? (
-                <p className="text-xs text-gray-400">暂无导出</p>
-              ) : (
-                exports.map((file) => (
-                  <button
-                    key={file.name}
-                    onClick={() => handleExportClick(file)}
-                    className="flex w-full items-center gap-2 rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
-                  >
-                    <span>📄</span>
-                    {file.name}
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </div>
       </div>
     </aside>
   );

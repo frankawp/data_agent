@@ -4,10 +4,6 @@ import React, { useState, useRef, useEffect, useCallback, ReactNode } from "reac
 import { useWorkspace, StreamingStep, SubagentStep } from "@/hooks/useWorkspaceContext";
 import { CodeViewer } from "@/components/data-display/CodeViewer";
 import { DataTable } from "@/components/data-display/DataTable";
-import { ExportsPanel } from "@/components/exports/ExportsPanel";
-
-// Tab 类型
-type WorkspaceTab = "output" | "exports";
 
 export function MainWorkspace() {
   const {
@@ -18,9 +14,6 @@ export function MainWorkspace() {
     isStreaming,
     streamingSteps,
   } = useWorkspace();
-
-  // Tab 状态
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>("output");
 
   // 滚动容器引用
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -120,37 +113,19 @@ export function MainWorkspace() {
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-white">
-      {/* Tab 切换栏 */}
-      <div className="flex shrink-0 border-b bg-gray-50">
-        <button
-          onClick={() => setActiveTab("output")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === "output"
-              ? "border-b-2 border-blue-500 bg-white text-blue-600"
-              : "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
-          }`}
-        >
+      {/* 标题栏 */}
+      <div className="flex shrink-0 items-center justify-between border-b bg-gray-50 px-4 py-2.5">
+        <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
           <span>📊</span>
           <span>实时输出</span>
           {isStreaming && (
             <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
           )}
-        </button>
-        <button
-          onClick={() => setActiveTab("exports")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === "exports"
-              ? "border-b-2 border-blue-500 bg-white text-blue-600"
-              : "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
-          }`}
-        >
-          <span>📦</span>
-          <span>导出文件</span>
-        </button>
+        </div>
       </div>
 
       {/* 历史模式提示条 */}
-      {activeTab === "output" && viewMode === "historical" && historicalStep && (
+      {viewMode === "historical" && historicalStep && (
         <div className="flex shrink-0 items-center justify-between border-b bg-amber-50 px-4 py-2">
           <span className="text-sm text-amber-800">
             正在查看历史步骤 #{historicalStep.index}: {historicalStep.toolName}
@@ -165,35 +140,29 @@ export function MainWorkspace() {
       )}
 
       {/* 内容区域 */}
-      {activeTab === "output" ? (
-        <div
-          ref={scrollContainerRef}
-          onScroll={handleScroll}
-          className="flex-1 overflow-auto p-4"
-        >
-          {viewMode === "live" ? (
-            isStreaming || streamingSteps.length > 0 ? (
-              <StreamingContent
-                steps={streamingSteps}
-                isStreaming={isStreaming}
-              />
-            ) : (
-              <LiveContent toolResult={currentToolResult} />
-            )
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-auto p-4"
+      >
+        {viewMode === "live" ? (
+          isStreaming || streamingSteps.length > 0 ? (
+            <StreamingContent
+              steps={streamingSteps}
+              isStreaming={isStreaming}
+            />
           ) : (
-            <HistoricalContent step={historicalStep} />
-          )}
-          {/* 底部标记 */}
-          <div ref={bottomRef} />
-        </div>
-      ) : (
-        <div className="flex-1 overflow-hidden">
-          <ExportsPanel />
-        </div>
-      )}
+            <LiveContent toolResult={currentToolResult} />
+          )
+        ) : (
+          <HistoricalContent step={historicalStep} />
+        )}
+        {/* 底部标记 */}
+        <div ref={bottomRef} />
+      </div>
 
       {/* 新内容提示按钮 */}
-      {activeTab === "output" && hasNewContent && !isAtBottom && (
+      {hasNewContent && !isAtBottom && (
         <button
           onClick={() => scrollToBottom()}
           className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 animate-bounce items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-blue-700"

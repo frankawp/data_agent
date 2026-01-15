@@ -9,12 +9,14 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useWorkspace, StreamingStep } from "@/hooks/useWorkspaceContext";
+import { useSession } from "@/providers/SessionProvider";
 
 interface ChatSidebarProps {
   className?: string;
 }
 
 export function ChatSidebar({ className }: ChatSidebarProps) {
+  const { sessionId } = useSession();
   const {
     setCurrentToolResult,
     clearHistory,
@@ -148,6 +150,7 @@ export function ChatSidebar({ className }: ChatSidebarProps) {
             role: m.role,
             content: m.content,
           })),
+          session_id: sessionId,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -233,7 +236,7 @@ export function ChatSidebar({ className }: ChatSidebarProps) {
 
   const clearChat = async () => {
     try {
-      await fetch("/api/chat/reset", { method: "POST" });
+      await fetch(`/api/chat/reset?session_id=${sessionId || "default"}`, { method: "POST" });
       setMessages([]);
       setCurrentToolResult(null);
       clearHistory();

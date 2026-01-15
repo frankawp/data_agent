@@ -10,8 +10,6 @@ from fastapi import APIRouter
 from copilotkit.integrations.fastapi import add_fastapi_endpoint
 from copilotkit import CopilotKitRemoteEndpoint, Action
 
-from ..agent.deep_agent import create_data_agent
-from ..config.modes import get_mode_manager
 from ..tools import (
     execute_sql,
     list_tables,

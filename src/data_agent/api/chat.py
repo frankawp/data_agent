@@ -42,7 +42,8 @@ class ToolCallInfo(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    messages: List[Message]
+    messages: Optional[List[Message]] = None  # 完整消息列表
+    message: Optional[str] = None  # 简单消息（兼容简化格式）
     session_id: Optional[str] = "default"
     stream: Optional[bool] = False  # 默认非流式，因为流式需要额外处理
 
@@ -62,7 +63,8 @@ def get_or_create_agent(session_id: str) -> DataAgent:
         # 开启自动执行
         mode_manager.set("auto", "on")
 
-        _agents[session_id] = DataAgent()
+        # 传递 session_id 确保导出文件保存到正确的会话目录
+        _agents[session_id] = DataAgent(session_id=session_id)
     return _agents[session_id]
 
 
@@ -135,12 +137,18 @@ async def chat(request: ChatRequest):
     try:
         agent = get_or_create_agent(request.session_id)
 
-        # 获取最后一条用户消息
+        # 获取用户消息（支持两种格式）
         user_message = None
-        for msg in reversed(request.messages):
-            if msg.role == "user":
-                user_message = msg.content
-                break
+
+        # 优先使用简单消息格式
+        if request.message:
+            user_message = request.message
+        # 其次从 messages 列表获取最后一条用户消息
+        elif request.messages:
+            for msg in reversed(request.messages):
+                if msg.role == "user":
+                    user_message = msg.content
+                    break
 
         if not user_message:
             raise HTTPException(status_code=400, detail="No user message found")
@@ -190,12 +198,18 @@ async def chat_stream(request: ChatRequest):
     try:
         agent = get_or_create_agent(request.session_id)
 
-        # 获取最后一条用户消息
+        # 获取用户消息（支持两种格式）
         user_message = None
-        for msg in reversed(request.messages):
-            if msg.role == "user":
-                user_message = msg.content
-                break
+
+        # 优先使用简单消息格式
+        if request.message:
+            user_message = request.message
+        # 其次从 messages 列表获取最后一条用户消息
+        elif request.messages:
+            for msg in reversed(request.messages):
+                if msg.role == "user":
+                    user_message = msg.content
+                    break
 
         if not user_message:
             raise HTTPException(status_code=400, detail="No user message found")

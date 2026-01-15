@@ -54,8 +54,8 @@ export interface StreamingStep {
 // 工作区上下文类型
 interface WorkspaceContextType {
   // Tab 状态
-  activeTab: "main" | "secondary";
-  setActiveTab: (tab: "main" | "secondary") => void;
+  activeTab: "main" | "secondary" | "exports";
+  setActiveTab: (tab: "main" | "secondary" | "exports") => void;
 
   // 副工作区内容
   secondaryContent: SecondaryContent | null;
@@ -102,7 +102,7 @@ const WorkspaceContext = createContext<WorkspaceContextType | null>(null);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   // Tab 状态
-  const [activeTab, setActiveTab] = useState<"main" | "secondary">("main");
+  const [activeTab, setActiveTab] = useState<"main" | "secondary" | "exports">("main");
 
   // 副工作区内容
   const [secondaryContent, setSecondaryContent] =
