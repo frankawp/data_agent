@@ -32,7 +32,7 @@ tools:
     sql_tools: true
     python_tools: true
     ml_tools: true
-    graph_tools: true
+    graph_tools: false  # 禁用图分析工具（使用 execute_python_safe + networkx 替代）
 
   # 工具别名（可选）
   aliases:
@@ -53,34 +53,20 @@ subagents:
 
   # 数据分析子代理
   data-analyzer:
-    description: "分析数据并提取洞察。用于统计分析、机器学习建模、图/网络分析。当需要对数据进行深度分析、建模预测或发现规律时，使用此代理。"
+    description: "分析数据并提取洞察。用于统计分析、机器学习建模。使用内置 read_file/write_file 访问 /exports/ 目录。"
     llm: powerful
     tools:
       - execute_python_safe
-      - list_variables
-      - clear_variables
-      - export_dataframe
-      - export_text
-      - list_exports
       - train_model
       - predict
-      - list_models
-      - create_graph
-      - graph_analysis
-      - list_graphs
     prompt_file: prompts/data_analyzer.md
 
   # 报告生成子代理
   report-writer:
-    description: "生成可视化图表和分析报告。用于创建数据可视化、格式化分析结果、生成专业报告。当需要生成图表或整理分析报告时，使用此代理。"
+    description: "生成可视化图表和分析报告。使用 matplotlib/seaborn 生成图表，保存到 /exports/ 目录。"
     llm: default
     tools:
       - execute_python_safe
-      - list_variables
-      - clear_variables
-      - export_dataframe
-      - export_text
-      - list_exports
     prompt_file: prompts/report_writer.md
 
 # ==================== 协调者配置 ====================

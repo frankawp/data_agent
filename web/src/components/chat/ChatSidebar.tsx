@@ -28,6 +28,8 @@ import {
   LoadingOutlined,
   BulbOutlined,
 } from "@ant-design/icons";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useWorkspace, StreamingStep } from "@/hooks/useWorkspaceContext";
 import { useSession } from "@/providers/SessionProvider";
 
@@ -456,9 +458,46 @@ function MessageBubble({ message, isLoading, streamingSteps, isStreaming }: Mess
         styles={{ body: { padding: "10px 16px" } }}
       >
         {message.content ? (
-          <Text style={{ color: isUser ? "#fff" : "#333", whiteSpace: "pre-wrap" }}>
-            {message.content}
-          </Text>
+          isUser ? (
+            // 用户消息 - 纯文本
+            <Text style={{ color: "#fff", whiteSpace: "pre-wrap" }}>
+              {message.content}
+            </Text>
+          ) : (
+            // AI 回复 - Markdown 渲染
+            <div style={{ color: "#333", fontSize: 14, lineHeight: 1.6 }}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  p: ({ children }) => <p style={{ margin: "4px 0" }}>{children}</p>,
+                  ul: ({ children }) => <ul style={{ margin: "4px 0", paddingLeft: 20 }}>{children}</ul>,
+                  ol: ({ children }) => <ol style={{ margin: "4px 0", paddingLeft: 20 }}>{children}</ol>,
+                  li: ({ children }) => <li style={{ margin: "2px 0" }}>{children}</li>,
+                  strong: ({ children }) => <strong style={{ color: "#389e0d", fontWeight: 600 }}>{children}</strong>,
+                  code: ({ children, className }) => {
+                    if (className) return <code>{children}</code>;
+                    return (
+                      <code style={{ background: "#f0f0f0", padding: "1px 4px", borderRadius: 3, fontSize: "0.9em" }}>
+                        {children}
+                      </code>
+                    );
+                  },
+                  pre: ({ children }) => (
+                    <pre style={{ background: "#1a1a2e", color: "#e0e0e0", padding: 8, borderRadius: 4, overflow: "auto", fontSize: 12, margin: "4px 0" }}>
+                      {children}
+                    </pre>
+                  ),
+                  a: ({ href, children }) => (
+                    <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: "#1890ff" }}>
+                      {children}
+                    </a>
+                  ),
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
+            </div>
+          )
         ) : isLoading ? (
           <StreamingStatus steps={streamingSteps} isStreaming={isStreaming} />
         ) : null}

@@ -34,6 +34,8 @@ import {
   ClockCircleOutlined,
 } from "@ant-design/icons";
 import { useWorkspace, StreamingStep, SubagentStep } from "@/hooks/useWorkspaceContext";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { CodeViewer } from "@/components/data-display/CodeViewer";
 import { DataTable } from "@/components/data-display/DataTable";
 import { FileContentRenderer } from "@/components/data-display/FileContentRenderer";
@@ -302,74 +304,67 @@ function StepCard({ step, info }: { step: StreamingStep; info: { name: string; i
   );
 }
 
-// 简单 Markdown 渲染组件
+// Markdown 渲染组件 - 使用 react-markdown
 function SimpleMarkdown({ text }: { text: string }) {
-  // 将文本按段落分割
-  const paragraphs = text.split(/\n\n+/);
-
   return (
     <div style={{ fontSize: 13, lineHeight: 1.8 }}>
-      {paragraphs.map((paragraph, idx) => {
-        // 检查是否是有序列表 (1. 2. 3. ...)
-        if (/^\d+\.\s/.test(paragraph.trim())) {
-          const items = paragraph.split(/\n/).filter((line) => line.trim());
-          return (
-            <ol key={idx} style={{ margin: "8px 0", paddingLeft: 24 }}>
-              {items.map((item, i) => (
-                <li key={i} style={{ margin: "4px 0" }}>
-                  <MarkdownText text={item.replace(/^\d+\.\s*/, "")} />
-                </li>
-              ))}
-            </ol>
-          );
-        }
-
-        // 检查是否是无序列表 (- 或 *)
-        if (/^[-*]\s/.test(paragraph.trim())) {
-          const items = paragraph.split(/\n/).filter((line) => line.trim());
-          return (
-            <ul key={idx} style={{ margin: "8px 0", paddingLeft: 24 }}>
-              {items.map((item, i) => (
-                <li key={i} style={{ margin: "4px 0" }}>
-                  <MarkdownText text={item.replace(/^[-*]\s*/, "")} />
-                </li>
-              ))}
-            </ul>
-          );
-        }
-
-        // 普通段落
-        return (
-          <p key={idx} style={{ margin: "6px 0" }}>
-            <MarkdownText text={paragraph} />
-          </p>
-        );
-      })}
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // 自定义段落
+          p: ({ children }) => <p style={{ margin: "6px 0" }}>{children}</p>,
+          // 自定义列表
+          ul: ({ children }) => <ul style={{ margin: "8px 0", paddingLeft: 24 }}>{children}</ul>,
+          ol: ({ children }) => <ol style={{ margin: "8px 0", paddingLeft: 24 }}>{children}</ol>,
+          li: ({ children }) => <li style={{ margin: "4px 0" }}>{children}</li>,
+          // 加粗样式
+          strong: ({ children }) => (
+            <strong style={{ color: "#389e0d", fontWeight: 600 }}>{children}</strong>
+          ),
+          // 行内代码
+          code: ({ children, className }) => {
+            if (className) return <code>{children}</code>;
+            return (
+              <code
+                style={{
+                  background: "#f0f0f0",
+                  padding: "2px 6px",
+                  borderRadius: 3,
+                  fontSize: "0.9em",
+                  fontFamily: "monospace",
+                }}
+              >
+                {children}
+              </code>
+            );
+          },
+          // 代码块
+          pre: ({ children }) => (
+            <pre
+              style={{
+                background: "#1a1a2e",
+                color: "#e0e0e0",
+                padding: 12,
+                borderRadius: 4,
+                overflow: "auto",
+                fontSize: 12,
+                margin: "8px 0",
+              }}
+            >
+              {children}
+            </pre>
+          ),
+          // 链接
+          a: ({ href, children }) => (
+            <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: "#1890ff" }}>
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {text}
+      </ReactMarkdown>
     </div>
-  );
-}
-
-// 处理行内 markdown 格式（加粗、斜体）
-function MarkdownText({ text }: { text: string }) {
-  // 匹配 **加粗** 和 *斜体*
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
-
-  return (
-    <>
-      {parts.map((part, i) => {
-        if (part.startsWith("**") && part.endsWith("**")) {
-          return (
-            <strong key={i} style={{ color: "#389e0d", fontWeight: 600 }}>
-              {part.slice(2, -2)}
-            </strong>
-          );
-        }
-        if (part.startsWith("*") && part.endsWith("*")) {
-          return <em key={i}>{part.slice(1, -1)}</em>;
-        }
-        return <span key={i}>{part}</span>;
-      })}
-    </>
   );
 }
 
@@ -648,6 +643,36 @@ function formatSubagentResult(toolName: string, result: string, args?: Record<st
       );
     }
 
+    case "write_file": {
+      // 写入文件 - 显示文件路径和写入的内容
+      const filePath = args?.path ? String(args.path) : (args?.file_path ? String(args.file_path) : "");
+      const content = args?.content ? String(args.content) : "";
+      const filename = filePath.split("/").pop() || "file.txt";
+
+      // 检查是否有实际内容写入
+      const hasContent = content && content.trim().length > 0;
+
+      return (
+        <div>
+          <Tag color="green" style={{ marginBottom: 6 }}>
+            ✏️ 写入: {filePath || "未知路径"}
+          </Tag>
+          {hasContent ? (
+            <FileContentRenderer
+              filename={filename}
+              content={content}
+              compact
+              maxHeight={200}
+            />
+          ) : (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {result || "文件写入成功"}
+            </Text>
+          )}
+        </div>
+      );
+    }
+
     default: {
       // 默认 - 简化显示
       const preview = result.slice(0, 80).replace(/\n/g, " ");
@@ -727,9 +752,10 @@ function StepResultDisplay({ toolName, result }: { toolName: string; result: str
       );
     }
     case "task":
+      // 子代理任务结果 - 使用 markdown 渲染
       return (
-        <div style={{ background: "#fafafa", padding: 12, borderRadius: 4, maxHeight: 300, overflow: "auto" }}>
-          <pre style={{ margin: 0, fontSize: 13, whiteSpace: "pre-wrap" }}>{truncated}</pre>
+        <div style={{ background: "#fafafa", padding: 12, borderRadius: 4, maxHeight: 400, overflow: "auto" }}>
+          <SimpleMarkdown text={truncated} />
         </div>
       );
     default:
@@ -797,6 +823,15 @@ function ToolResultDisplay({ toolResult }: { toolResult: { toolName: string; arg
             </pre>
           </Card>
         </div>
+      );
+    case "task":
+      // 子代理任务 - 使用 markdown 渲染结果
+      return (
+        <Card title="子代理执行结果" size="small">
+          <div style={{ background: "#fafafa", padding: 16, borderRadius: 4, maxHeight: 500, overflow: "auto" }}>
+            <SimpleMarkdown text={result} />
+          </div>
+        </Card>
       );
     default:
       return (

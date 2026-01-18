@@ -29,13 +29,26 @@ def get_session_by_id(session_id: str) -> Optional["SessionManager"]:
     """
     根据 session_id 获取会话实例
 
+    如果会话不在内存中但目录存在，会自动恢复会话。
+
     Args:
         session_id: 会话 ID
 
     Returns:
         SessionManager 实例，如果不存在则返回 None
     """
-    return _session_registry.get(session_id)
+    # 先检查内存中是否有
+    if session_id in _session_registry:
+        return _session_registry[session_id]
+
+    # 内存中没有，检查目录是否存在（可能是服务器重启后丢失的会话）
+    session_dir = SessionManager.SESSIONS_DIR / session_id
+    if session_dir.exists() and session_dir.is_dir():
+        # 目录存在，恢复会话
+        logger.info(f"恢复会话: {session_id}")
+        return SessionManager(session_id=session_id)
+
+    return None
 
 
 class SessionManager:

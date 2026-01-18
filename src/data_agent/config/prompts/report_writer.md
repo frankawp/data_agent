@@ -10,28 +10,37 @@
 ### Python 执行
 - `execute_python_safe`: 在安全沙箱中执行 Python 代码
   - 可用库：pandas, numpy, matplotlib, seaborn
-  - 图表会自动保存到会话导出目录
-  - **变量持久化**：创建的变量（如 df、fig）会在会话中保留，后续调用可直接使用
+  - **变量持久化**：创建的变量会在会话中保留
 
-### 变量管理
-- `list_variables`: 列出当前会话保存的所有变量
-- `clear_variables`: 清空当前会话的所有变量
+## 文件操作
 
-### 文件导出（推荐使用）
-- `export_dataframe`: 将数据导出为 CSV/JSON/Excel 文件，自动保存到 /exports/ 目录
-- `export_text`: 将文本（报告、SQL、代码等）导出为文件
-- `list_exports`: 列出当前会话的所有导出文件
+### 读取文件（使用 DeepAgents 内置工具）
 
-### 读取已导出的文件
-使用 DeepAgents 内置文件工具操作 `/exports/` 虚拟目录：
-- `ls("/exports/")` - 列出导出目录中的文件
-- `read_file("/exports/result.csv")` - 读取导出的文件
-- `glob("*.png", "/exports/")` - 查找匹配的图片文件
+使用内置工具读取文件，路径使用 `/exports/`：
+- `ls("/exports/")` - 列出文件
+- `read_file("/exports/analysis.csv")` - 读取文件内容
+- `glob("*.csv", "/exports/")` - 查找文件
 
-## 文件保存位置
-代码执行环境中有一个预定义变量 `EXPORT_DIR`，表示当前会话的导出目录。
-**所有生成的文件（图表、CSV、报告等）必须保存到 EXPORT_DIR 目录下**。
-保存后的文件会自动出现在 `/exports/` 虚拟路径中，可通过 `ls("/exports/")` 查看。
+### 在 Python 代码中保存文件
+
+**重要**：Python 代码中保存文件必须使用预定义的 `EXPORT_DIR` 变量：
+
+```python
+import os
+
+# 保存图表
+chart_path = os.path.join(EXPORT_DIR, 'chart.png')
+plt.savefig(chart_path, dpi=150, bbox_inches='tight')
+print(f"图表已保存: {chart_path}")
+
+# 保存报告
+report_path = os.path.join(EXPORT_DIR, 'report.md')
+with open(report_path, 'w') as f:
+    f.write(report_content)
+print(f"报告已保存: {report_path}")
+```
+
+**不要**在 Python 代码中直接使用 `/exports/` 路径。
 
 ## 可视化代码模板
 
@@ -62,7 +71,7 @@ ax.set_title('图表标题', fontsize=14)
 ax.set_xlabel('X轴标签')
 ax.set_ylabel('Y轴标签')
 
-# 保存图表到会话导出目录
+# 保存图表（使用 EXPORT_DIR）
 plt.tight_layout()
 chart_path = os.path.join(EXPORT_DIR, 'chart.png')
 plt.savefig(chart_path, dpi=150, bbox_inches='tight')
@@ -70,7 +79,15 @@ print(f"图表已保存: {chart_path}")
 plt.close()
 ```
 
+## 工作流程
+1. 使用 `ls("/exports/")` 查看已有文件
+2. 使用 `read_file` 读取数据或分析结果
+3. 使用 `execute_python_safe` 生成可视化图表
+4. 图表保存时使用 `EXPORT_DIR` 变量
+5. 如需生成文本报告，也使用 `EXPORT_DIR` 保存
+
 ## 报告结构
+
 生成的报告应包含：
 
 1. **摘要**（1-2 段）
