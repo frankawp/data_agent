@@ -20,20 +20,42 @@
 
 ## 架构
 
+### 多代理协作架构
+
 ```
-CLI (main.py) / API (api/main.py)
-    ↓
-DataAgent (agent/deep_agent.py)
-    ↓ DeepAgents 框架 + 智谱 AI LLM (glm-4.7)
-    ↓
+CLI (main.py) / Web (web/) / API (api/main.py)
+                    ↓
+            DataAgent (Coordinator)
+                    ↓
+    ┌───────────────┼───────────────┐
+    ↓               ↓               ↓
+data-collector  data-analyzer  report-writer
+(SQL 查询)     (Python 分析)   (图表生成)
+    ↓               ↓               ↓
+list_tables    execute_python   execute_python
+describe_table train_model      export_dataframe
+execute_sql    graph_analysis   export_text
+                    ↓
+        沙箱 (MicroSandbox 隔离执行)
+```
+
+### 子代理职责
+
+| 子代理 | 职责 | 主要工具 |
+|--------|------|----------|
+| **data-collector** | 数据采集、SQL 查询、表结构探索 | `list_tables`, `describe_table`, `execute_sql` |
+| **data-analyzer** | 统计分析、机器学习建模、图分析 | `execute_python_safe`, `train_model`, `graph_analysis` |
+| **report-writer** | 可视化图表、分析报告生成 | `execute_python_safe`, `export_dataframe` |
+
+### 工具集
+
+```
 工具集 (tools/)
 ├── sql_tools.py      # SQL 查询（仅 SELECT，有黑名单防护）
 ├── data_tools.py     # pandas/scipy 数据分析
 ├── ml_tools.py       # scikit-learn 机器学习（15+ 模型）
 ├── graph_tools.py    # networkx 图分析
 └── python_tools.py   # 安全 Python 执行
-    ↓
-沙箱 (sandbox/microsandbox.py) - MicroSandbox 隔离执行
 ```
 
 ### 支持的机器学习模型
@@ -109,6 +131,61 @@ CONVERSATION_MEMORY_SIZE=20
 LOG_LEVEL=INFO
 ```
 
+### Agent 系统配置
+
+除了环境变量，还可以通过 `agents.yaml` 文件配置多代理系统。配置文件按以下顺序查找：
+
+1. `~/.data_agent/agents.yaml` （用户自定义）
+2. `./config/agents.yaml` （项目目录）
+3. 内置默认配置
+
+#### 配置示例
+
+```yaml
+# agents.yaml
+version: "1.0"
+
+# LLM 配置
+llm:
+  default:
+    model: ${MODEL:deepseek-chat}
+    api_key: ${API_KEY}
+    temperature: 0.7
+  profiles:
+    fast:
+      model: ${MODEL:deepseek-chat}
+      temperature: 0.5
+
+# 工具开关
+tools:
+  builtin:
+    sql_tools: true
+    python_tools: true
+    ml_tools: true
+    graph_tools: true
+
+# 子代理配置
+subagents:
+  data-collector:
+    description: "从数据库采集数据"
+    llm: fast
+    tools:
+      - list_tables
+      - describe_table
+      - execute_sql
+    prompt_file: prompts/data_collector.md
+
+  data-analyzer:
+    description: "分析数据并提取洞察"
+    llm: default
+    tools:
+      - execute_python_safe
+      - train_model
+    prompt_file: prompts/data_analyzer.md
+```
+
+详细配置说明请参考 [配置指南](docs/configuration.md)。
+
 ## 使用方法
 
 ### CLI 模式
@@ -130,6 +207,22 @@ data-agent-api
 # 或指定端口
 uvicorn data_agent.api.main:app --host 0.0.0.0 --port 8000
 ```
+
+### CLI 命令
+
+在 CLI 交互模式下，支持以下斜杠命令：
+
+| 命令 | 说明 |
+|------|------|
+| `/help` | 显示帮助信息 |
+| `/config` | 查看当前 Agent 配置 |
+| `/reload` | 重新加载配置文件 |
+| `/modes` | 查看运行时模式状态 |
+| `/plan on\|off\|auto` | 切换计划模式 |
+| `/auto on\|off` | 切换自动执行模式 |
+| `/safe on\|off` | 切换安全模式 |
+| `/preview 10\|50\|100\|all` | 设置数据预览行数 |
+| `/clear` | 清除对话历史 |
 
 ### 示例对话
 
