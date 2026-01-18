@@ -556,8 +556,38 @@ function formatSubagentResult(toolName: string, result: string, args?: Record<st
     }
 
     case "execute_sql": {
-      // SQL 查询 - 用表格展示
-      return <DataTable data={parseTableData(result)} maxRows={5} compact />;
+      // SQL 查询 - 显示 SQL 语句和表格结果
+      const query = args?.query ? String(args.query) : "";
+      return (
+        <div>
+          {query && (
+            <div style={{ marginBottom: 8 }}>
+              <Text type="secondary" style={{ fontSize: 11, display: "block", marginBottom: 4 }}>
+                SQL 语句:
+              </Text>
+              <pre
+                style={{
+                  margin: 0,
+                  padding: 8,
+                  background: "#f6f8fa",
+                  borderRadius: 4,
+                  fontSize: 11,
+                  fontFamily: "monospace",
+                  overflow: "auto",
+                  maxHeight: 80,
+                  border: "1px solid #e8e8e8",
+                }}
+              >
+                {query}
+              </pre>
+            </div>
+          )}
+          <Text type="secondary" style={{ fontSize: 11, display: "block", marginBottom: 4 }}>
+            查询结果:
+          </Text>
+          <DataTable data={parseTableData(result)} maxRows={5} compact />
+        </div>
+      );
     }
 
     case "execute_python_safe": {
