@@ -3,19 +3,38 @@
 /**
  * 聊天侧边栏组件
  *
- * 使用 Assistant UI 组件库提供专业的 AI Agent 聊天界面。
+ * 使用 Ant Design 组件库重构的 AI Agent 聊天界面。
  * 支持工具调用显示、流式响应、用户中断等功能。
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import {
+  Button,
+  Input,
+  Typography,
+  Space,
+  Progress,
+  Tag,
+  Spin,
+  Card,
+} from "antd";
+import {
+  SendOutlined,
+  ClearOutlined,
+  StopOutlined,
+  MessageOutlined,
+  RobotOutlined,
+  CheckCircleOutlined,
+  LoadingOutlined,
+  BulbOutlined,
+} from "@ant-design/icons";
 import { useWorkspace, StreamingStep } from "@/hooks/useWorkspaceContext";
 import { useSession } from "@/providers/SessionProvider";
 
-interface ChatSidebarProps {
-  className?: string;
-}
+const { TextArea } = Input;
+const { Text, Title } = Typography;
 
-export function ChatSidebar({ className }: ChatSidebarProps) {
+export function ChatSidebar() {
   const { sessionId } = useSession();
   const {
     setCurrentToolResult,
@@ -120,7 +139,6 @@ export function ChatSidebar({ className }: ChatSidebarProps) {
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
-    // 取消之前的请求
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -246,39 +264,53 @@ export function ChatSidebar({ className }: ChatSidebarProps) {
   };
 
   return (
-    <aside className={`flex h-full flex-col border-l bg-white ${className}`}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#fff" }}>
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between border-b bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-              />
-            </svg>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "12px 16px",
+          borderBottom: "1px solid #f0f0f0",
+          background: "linear-gradient(to right, #eff6ff, #eef2ff)",
+        }}
+      >
+        <Space>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: "#2563eb",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <MessageOutlined />
           </div>
           <div>
-            <h2 className="font-semibold text-gray-800">数据分析助手</h2>
-            <p className="text-xs text-gray-500">AI 驱动的智能分析</p>
+            <Title level={5} style={{ margin: 0, fontSize: 14 }}>
+              数据分析助手
+            </Title>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              AI 驱动的智能分析
+            </Text>
           </div>
-        </div>
-        <button
-          onClick={clearChat}
-          className="rounded-lg px-3 py-1.5 text-sm text-gray-500 transition-colors hover:bg-white hover:text-gray-700 hover:shadow-sm"
-        >
+        </Space>
+        <Button type="text" icon={<ClearOutlined />} onClick={clearChat}>
           清空对话
-        </button>
+        </Button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
+      <div style={{ flex: 1, overflow: "auto", padding: messages.length > 0 ? 16 : 0 }}>
         {messages.length === 0 ? (
           <WelcomeMessage />
         ) : (
-          <div className="space-y-1 p-4">
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {messages.map((message) => (
               <MessageBubble
                 key={message.id}
@@ -294,108 +326,90 @@ export function ChatSidebar({ className }: ChatSidebarProps) {
       </div>
 
       {/* Input Area */}
-      <div className="shrink-0 border-t bg-gray-50 p-4">
+      <div style={{ borderTop: "1px solid #f0f0f0", background: "#fafafa", padding: 16 }}>
         {/* 停止按钮 */}
         {isLoading && (
-          <div className="mb-3 flex justify-center">
-            <button
+          <div style={{ textAlign: "center", marginBottom: 12 }}>
+            <Button
+              danger
+              icon={<StopOutlined />}
               onClick={handleCancel}
-              className="flex items-center gap-2 rounded-full bg-red-100 px-4 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-200"
+              style={{ borderRadius: 20 }}
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
-                />
-              </svg>
               停止生成
-            </button>
+            </Button>
           </div>
         )}
 
-        <div className="flex gap-2">
-          <textarea
+        <Space.Compact style={{ width: "100%" }}>
+          <TextArea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="描述您的数据分析需求..."
             disabled={isLoading}
             rows={2}
-            className="flex-1 resize-none rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm transition-all focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100"
+            style={{ borderRadius: "12px 0 0 12px", resize: "none" }}
           />
-          <button
+          <Button
+            type="primary"
+            icon={isLoading ? <LoadingOutlined /> : <SendOutlined />}
             onClick={sendMessage}
             disabled={!input.trim() || isLoading}
-            className="flex h-auto items-center justify-center rounded-xl bg-blue-600 px-4 text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md disabled:cursor-not-allowed disabled:bg-gray-300"
-          >
-            {isLoading ? (
-              <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-            ) : (
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                />
-              </svg>
-            )}
-          </button>
-        </div>
-        <p className="mt-2 text-center text-xs text-gray-400">
+            style={{ height: "auto", borderRadius: "0 12px 12px 0" }}
+          />
+        </Space.Compact>
+        <Text type="secondary" style={{ display: "block", textAlign: "center", marginTop: 8, fontSize: 12 }}>
           按 Enter 发送，Shift + Enter 换行
-        </p>
+        </Text>
       </div>
-    </aside>
+    </div>
   );
 }
 
 // 欢迎消息
 function WelcomeMessage() {
   return (
-    <div className="flex h-full flex-col items-center justify-center p-6 text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg">
-        <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-          />
-        </svg>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100%",
+        padding: 24,
+        textAlign: "center",
+      }}
+    >
+      <div
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: 16,
+          background: "linear-gradient(135deg, #3b82f6, #4f46e5)",
+          color: "#fff",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 32,
+          marginBottom: 16,
+          boxShadow: "0 10px 25px rgba(59, 130, 246, 0.3)",
+        }}
+      >
+        <BulbOutlined />
       </div>
-      <h3 className="mb-2 text-lg font-semibold text-gray-800">数据分析助手</h3>
-      <p className="mb-6 max-w-sm text-sm text-gray-500">
+      <Title level={4} style={{ marginBottom: 8 }}>
+        数据分析助手
+      </Title>
+      <Text type="secondary" style={{ maxWidth: 280, marginBottom: 24 }}>
         我可以帮助您进行数据查询、分析和可视化。请描述您的需求，我将自动规划和执行任务。
-      </p>
+      </Text>
 
-      <div className="grid w-full max-w-sm gap-2">
+      <Space orientation="vertical" style={{ width: "100%", maxWidth: 280 }}>
         <SuggestionButton text="分析数据库中的表结构" />
         <SuggestionButton text="查询销售数据并生成报表" />
         <SuggestionButton text="训练一个预测模型" />
-      </div>
+      </Space>
     </div>
   );
 }
@@ -403,10 +417,18 @@ function WelcomeMessage() {
 // 建议按钮
 function SuggestionButton({ text }: { text: string }) {
   return (
-    <button className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-left text-sm text-gray-600 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm">
-      <span className="mr-2 text-blue-500">→</span>
+    <Button
+      block
+      style={{
+        height: "auto",
+        padding: "10px 16px",
+        textAlign: "left",
+        borderRadius: 8,
+      }}
+    >
+      <Text type="secondary" style={{ marginRight: 8 }}>→</Text>
       {text}
-    </button>
+    </Button>
   );
 }
 
@@ -422,20 +444,25 @@ function MessageBubble({ message, isLoading, streamingSteps, isStreaming }: Mess
   const isUser = message.role === "user";
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
-          isUser
-            ? "bg-blue-600 text-white"
-            : "bg-white text-gray-800 shadow-sm ring-1 ring-gray-100"
-        }`}
+    <div style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
+      <Card
+        size="small"
+        style={{
+          maxWidth: "85%",
+          borderRadius: 16,
+          background: isUser ? "#2563eb" : "#fff",
+          border: isUser ? "none" : "1px solid #f0f0f0",
+        }}
+        styles={{ body: { padding: "10px 16px" } }}
       >
         {message.content ? (
-          <div className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</div>
+          <Text style={{ color: isUser ? "#fff" : "#333", whiteSpace: "pre-wrap" }}>
+            {message.content}
+          </Text>
         ) : isLoading ? (
           <StreamingStatus steps={streamingSteps} isStreaming={isStreaming} />
         ) : null}
-      </div>
+      </Card>
     </div>
   );
 }
@@ -509,61 +536,61 @@ function StreamingStatus({ steps, isStreaming }: StreamingStatusProps) {
 
   if (totalSteps === 0 && isStreaming) {
     return (
-      <div className="flex items-center space-x-2 py-1">
-        <div className="flex space-x-1">
-          <div className="h-2 w-2 animate-bounce rounded-full bg-blue-400"></div>
-          <div
-            className="h-2 w-2 animate-bounce rounded-full bg-blue-400"
-            style={{ animationDelay: "0.1s" }}
-          ></div>
-          <div
-            className="h-2 w-2 animate-bounce rounded-full bg-blue-400"
-            style={{ animationDelay: "0.2s" }}
-          ></div>
-        </div>
-        <span className="text-xs text-gray-500">AI 正在分析您的需求...</span>
-      </div>
+      <Space>
+        <Spin size="small" />
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          AI 正在分析您的需求...
+        </Text>
+      </Space>
     );
   }
 
+  const percent = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;
+
   return (
-    <div className="min-w-[200px] space-y-2">
+    <div style={{ minWidth: 200 }}>
       {/* 进度指示器 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500"></div>
-          <span className="text-xs font-medium text-gray-700">
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+        <Space size={4}>
+          <RobotOutlined style={{ color: "#2563eb" }} />
+          <Text style={{ fontSize: 12 }}>
             步骤 {completedCount + (currentStep ? 1 : 0)}/{totalSteps}
-          </span>
-        </div>
-        {isStreaming && <span className="text-xs text-blue-600">执行中</span>}
+          </Text>
+        </Space>
+        {isStreaming && (
+          <Tag color="processing" style={{ marginRight: 0 }}>
+            执行中
+          </Tag>
+        )}
       </div>
 
       {/* 进度条 */}
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300"
-          style={{
-            width: `${totalSteps > 0 ? (completedCount / totalSteps) * 100 : 0}%`,
-          }}
-        />
-      </div>
+      <Progress
+        percent={percent}
+        size="small"
+        strokeColor={{ from: "#3b82f6", to: "#4f46e5" }}
+        showInfo={false}
+      />
 
       {/* 当前步骤描述 */}
       {currentStep && (
-        <p className="text-xs leading-relaxed text-gray-600">{getStepDescription(currentStep)}</p>
+        <Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 8 }}>
+          {getStepDescription(currentStep)}
+        </Text>
       )}
 
       {/* 已完成的步骤摘要 */}
       {completedCount > 0 && (
-        <div className="mt-2 space-y-0.5 border-t pt-2 text-xs text-gray-500">
+        <div style={{ marginTop: 12, paddingTop: 8, borderTop: "1px solid #f0f0f0" }}>
           {steps
             .filter((s) => s.status === "completed")
             .slice(-3)
             .map((step, idx) => (
-              <div key={idx} className="flex items-center space-x-1">
-                <span className="text-green-500">✓</span>
-                <span className="truncate">{toolNameMap[step.toolName] || step.toolName}</span>
+              <div key={idx} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+                <CheckCircleOutlined style={{ color: "#52c41a", fontSize: 12 }} />
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {toolNameMap[step.toolName] || step.toolName}
+                </Text>
               </div>
             ))}
         </div>

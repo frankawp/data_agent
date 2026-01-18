@@ -1,22 +1,49 @@
 "use client";
 
+import { Tag } from "antd";
+
 interface CodeViewerProps {
   code: string;
   language?: "sql" | "python" | "json";
+  maxHeight?: number;
 }
 
-export function CodeViewer({ code, language = "sql" }: CodeViewerProps) {
+export function CodeViewer({ code, language = "sql", maxHeight }: CodeViewerProps) {
   // 简单的语法高亮（可以后续替换为 Monaco Editor）
   const highlightedCode = highlightSyntax(code, language);
 
+  const langColors: Record<string, string> = {
+    sql: "blue",
+    python: "green",
+    json: "orange",
+  };
+
   return (
-    <div className="relative rounded-lg border bg-gray-50 overflow-hidden">
-      <div className="absolute right-2 top-2">
-        <span className="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-600 uppercase">
+    <div
+      style={{
+        position: "relative",
+        borderRadius: 4,
+        border: "1px solid #e8e8e8",
+        background: "#fafafa",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ position: "absolute", right: 8, top: 8 }}>
+        <Tag color={langColors[language] || "default"} style={{ textTransform: "uppercase" }}>
           {language}
-        </span>
+        </Tag>
       </div>
-      <pre className="p-4 text-sm overflow-auto">
+      <pre
+        style={{
+          padding: 16,
+          paddingTop: 40,
+          fontSize: 13,
+          overflow: "auto",
+          maxHeight: maxHeight || "none",
+          margin: 0,
+          background: "#fafafa",
+        }}
+      >
         <code dangerouslySetInnerHTML={{ __html: highlightedCode }} />
       </pre>
     </div>
@@ -175,7 +202,10 @@ function highlightPython(code: string): string {
 }
 
 function escapeHtml(text: string): string {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }

@@ -7,7 +7,35 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import {
+  List,
+  Button,
+  Empty,
+  Spin,
+  Typography,
+  Space,
+  Tag,
+  Card,
+  Image,
+  Alert,
+} from "antd";
+import {
+  ReloadOutlined,
+  DownloadOutlined,
+  CloseOutlined,
+  FileExcelOutlined,
+  FileImageOutlined,
+  FileTextOutlined,
+  CodeOutlined,
+  DatabaseOutlined,
+  FileOutlined,
+  RobotOutlined,
+  FileMarkdownOutlined,
+} from "@ant-design/icons";
 import { useSession } from "@/providers/SessionProvider";
+import { FileContentRenderer } from "@/components/data-display/FileContentRenderer";
+
+const { Text, Title } = Typography;
 
 // 文件类型
 interface ExportFile {
@@ -43,46 +71,46 @@ function formatTime(timestamp: number): string {
 }
 
 // 获取文件图标
-function getFileIcon(filename: string): string {
+function getFileIcon(filename: string) {
   const ext = filename.split(".").pop()?.toLowerCase() || "";
-  const icons: Record<string, string> = {
-    csv: "📊",
-    xlsx: "📊",
-    xls: "📊",
-    png: "🖼️",
-    jpg: "🖼️",
-    jpeg: "🖼️",
-    gif: "🖼️",
-    svg: "🖼️",
-    json: "📄",
-    sql: "🗃️",
-    py: "🐍",
-    txt: "📝",
-    md: "📝",
-    html: "🌐",
-    pdf: "📕",
-    pkl: "🤖",
-    joblib: "🤖",
-    model: "🤖",
+  const iconMap: Record<string, React.ReactNode> = {
+    csv: <FileExcelOutlined style={{ color: "#52c41a" }} />,
+    xlsx: <FileExcelOutlined style={{ color: "#52c41a" }} />,
+    xls: <FileExcelOutlined style={{ color: "#52c41a" }} />,
+    png: <FileImageOutlined style={{ color: "#1890ff" }} />,
+    jpg: <FileImageOutlined style={{ color: "#1890ff" }} />,
+    jpeg: <FileImageOutlined style={{ color: "#1890ff" }} />,
+    gif: <FileImageOutlined style={{ color: "#1890ff" }} />,
+    svg: <FileImageOutlined style={{ color: "#1890ff" }} />,
+    json: <FileTextOutlined style={{ color: "#faad14" }} />,
+    sql: <DatabaseOutlined style={{ color: "#722ed1" }} />,
+    py: <CodeOutlined style={{ color: "#13c2c2" }} />,
+    txt: <FileMarkdownOutlined style={{ color: "#1890ff" }} />,
+    md: <FileMarkdownOutlined style={{ color: "#1890ff" }} />,
+    pkl: <RobotOutlined style={{ color: "#eb2f96" }} />,
+    joblib: <RobotOutlined style={{ color: "#eb2f96" }} />,
   };
-  return icons[ext] || "📁";
+  return iconMap[ext] || <FileOutlined />;
 }
 
 // 获取文件类型标签
-function getFileTypeLabel(filename: string): string {
+function getFileTypeLabel(filename: string): { label: string; color: string } {
   const ext = filename.split(".").pop()?.toLowerCase() || "";
-  const labels: Record<string, string> = {
-    csv: "数据表",
-    xlsx: "Excel",
-    png: "图片",
-    jpg: "图片",
-    json: "JSON",
-    sql: "SQL",
-    py: "Python",
-    pkl: "模型",
-    joblib: "模型",
+  const typeMap: Record<string, { label: string; color: string }> = {
+    csv: { label: "数据表", color: "green" },
+    xlsx: { label: "Excel", color: "green" },
+    png: { label: "图片", color: "blue" },
+    jpg: { label: "图片", color: "blue" },
+    jpeg: { label: "图片", color: "blue" },
+    json: { label: "JSON", color: "orange" },
+    sql: { label: "SQL", color: "purple" },
+    py: { label: "Python", color: "cyan" },
+    txt: { label: "文档", color: "blue" },
+    md: { label: "Markdown", color: "blue" },
+    pkl: { label: "模型", color: "magenta" },
+    joblib: { label: "模型", color: "magenta" },
   };
-  return labels[ext] || ext.toUpperCase();
+  return typeMap[ext] || { label: ext.toUpperCase(), color: "default" };
 }
 
 export function ExportsPanel() {
@@ -100,7 +128,6 @@ export function ExportsPanel() {
     setError(null);
 
     try {
-      // 使用 session_id 参数获取指定会话的导出文件
       const url = sessionId
         ? `/api/sessions/exports?session_id=${sessionId}`
         : "/api/sessions/exports";
@@ -119,7 +146,6 @@ export function ExportsPanel() {
 
   useEffect(() => {
     fetchExports();
-    // 每 10 秒刷新一次
     const interval = setInterval(fetchExports, 10000);
     return () => clearInterval(interval);
   }, [fetchExports]);
@@ -131,7 +157,6 @@ export function ExportsPanel() {
     setPreview(null);
 
     try {
-      // 传递 session_id 参数
       const url = sessionId
         ? `/api/sessions/exports/${file.name}/preview?session_id=${sessionId}`
         : `/api/sessions/exports/${file.name}/preview`;
@@ -150,189 +175,173 @@ export function ExportsPanel() {
 
   // 下载文件
   const handleDownload = (file: ExportFile) => {
-    // 传递 session_id 参数
     const url = sessionId
       ? `/api/sessions/exports/${file.name}/download?session_id=${sessionId}`
       : `/api/sessions/exports/${file.name}/download`;
     window.open(url, "_blank");
   };
 
-  // 刷新列表
-  const handleRefresh = () => {
-    fetchExports();
-  };
-
   return (
-    <div className="flex h-full flex-col bg-white">
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#fff" }}>
       {/* 头部 */}
-      <div className="flex items-center justify-between border-b p-3">
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "12px 16px",
+          borderBottom: "1px solid #f0f0f0",
+        }}
+      >
         <div>
-          <h3 className="flex items-center gap-2 font-semibold text-gray-800">
-            <span>📦</span>
-            <span>导出文件</span>
-          </h3>
-          <p className="text-xs text-gray-500">
+          <Title level={5} style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+            📦 导出文件
+          </Title>
+          <Text type="secondary" style={{ fontSize: 12 }}>
             {loading ? "加载中..." : `${files.length} 个文件`}
-          </p>
+          </Text>
         </div>
-        <button
-          onClick={handleRefresh}
+        <Button
+          type="text"
+          icon={<ReloadOutlined spin={loading} />}
+          onClick={fetchExports}
           disabled={loading}
-          className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
-          title="刷新"
-        >
-          <svg
-            className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-        </button>
+        />
       </div>
 
       {/* 文件列表 */}
-      <div className="flex-1 overflow-auto">
+      <div style={{ flex: 1, overflow: "auto" }}>
         {error ? (
-          <div className="p-4 text-center text-red-500">
-            <p>{error}</p>
-            <button
-              onClick={handleRefresh}
-              className="mt-2 text-sm text-blue-500 hover:underline"
-            >
-              重试
-            </button>
+          <div style={{ padding: 16 }}>
+            <Alert
+              message={error}
+              type="error"
+              action={
+                <Button size="small" type="link" onClick={fetchExports}>
+                  重试
+                </Button>
+              }
+            />
           </div>
-        ) : files.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center p-4 text-gray-400">
-            <span className="text-4xl">📭</span>
-            <p className="mt-2 text-sm">暂无导出文件</p>
-            <p className="text-xs">执行数据分析任务后会自动生成</p>
-          </div>
+        ) : files.length === 0 && !loading ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <span>
+                暂无导出文件
+                <br />
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  执行数据分析任务后会自动生成
+                </Text>
+              </span>
+            }
+            style={{ marginTop: 48 }}
+          />
         ) : (
-          <div className="divide-y">
-            {files.map((file) => (
-              <div
-                key={file.name}
-                className={`cursor-pointer p-3 transition-colors hover:bg-gray-50 ${
-                  selectedFile?.name === file.name ? "bg-blue-50" : ""
-                }`}
+          <List
+            loading={loading}
+            dataSource={files}
+            renderItem={(file) => (
+              <List.Item
+                style={{
+                  padding: "12px 16px",
+                  cursor: "pointer",
+                  background: selectedFile?.name === file.name ? "#e6f4ff" : "transparent",
+                }}
                 onClick={() => handlePreview(file)}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{getFileIcon(file.name)}</span>
-                  <div className="flex-1 overflow-hidden">
-                    <p className="truncate text-sm font-medium text-gray-700">
-                      {file.name}
-                    </p>
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <span className="rounded bg-gray-100 px-1.5 py-0.5">
-                        {getFileTypeLabel(file.name)}
-                      </span>
-                      <span>{formatSize(file.size)}</span>
-                      <span>•</span>
-                      <span>{formatTime(file.modified)}</span>
-                    </div>
-                  </div>
-                  <button
+                actions={[
+                  <Button
+                    key="download"
+                    type="text"
+                    size="small"
+                    icon={<DownloadOutlined />}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDownload(file);
                     }}
-                    className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
-                    title="下载"
-                  >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+                  />,
+                ]}
+              >
+                <List.Item.Meta
+                  avatar={
+                    <span style={{ fontSize: 20 }}>{getFileIcon(file.name)}</span>
+                  }
+                  title={
+                    <Text ellipsis style={{ maxWidth: 180 }}>
+                      {file.name}
+                    </Text>
+                  }
+                  description={
+                    <Space size={4}>
+                      <Tag color={getFileTypeLabel(file.name).color} style={{ marginRight: 0 }}>
+                        {getFileTypeLabel(file.name).label}
+                      </Tag>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {formatSize(file.size)}
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {formatTime(file.modified)}
+                      </Text>
+                    </Space>
+                  }
+                />
+              </List.Item>
+            )}
+          />
         )}
       </div>
 
       {/* 预览区域 */}
       {selectedFile && (
-        <div className="border-t">
-          <div className="flex items-center justify-between bg-gray-50 px-3 py-2">
-            <span className="text-sm font-medium text-gray-600">
+        <Card
+          size="small"
+          title={
+            <Text ellipsis style={{ maxWidth: 200 }}>
               预览: {selectedFile.name}
-            </span>
-            <button
+            </Text>
+          }
+          extra={
+            <Button
+              type="text"
+              size="small"
+              icon={<CloseOutlined />}
               onClick={() => {
                 setSelectedFile(null);
                 setPreview(null);
               }}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="max-h-48 overflow-auto bg-gray-100 p-3">
+            />
+          }
+          style={{ borderRadius: 0, borderLeft: 0, borderRight: 0, borderBottom: 0 }}
+          styles={{ body: { padding: 0 } }}
+        >
+          <div style={{ padding: 12 }}>
             {previewLoading ? (
-              <div className="flex items-center justify-center py-4 text-gray-400">
-                <svg
-                  className="mr-2 h-4 w-4 animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  />
-                </svg>
-                加载中...
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <Spin size="small" />
+                <Text type="secondary" style={{ marginLeft: 8 }}>
+                  加载中...
+                </Text>
               </div>
             ) : preview ? (
-              preview.type === "image" ? (
-                <img
-                  src={preview.content}
-                  alt={selectedFile.name}
-                  className="max-w-full"
-                />
-              ) : (
-                <pre className="whitespace-pre-wrap break-all text-xs text-gray-700">
-                  {preview.content}
-                </pre>
-              )
+              <FileContentRenderer
+                filename={selectedFile.name}
+                content={preview.content}
+                compact
+                maxHeight={250}
+              />
             ) : null}
           </div>
-          <div className="flex gap-2 p-3">
-            <button
+          <div style={{ padding: 12 }}>
+            <Button
+              type="primary"
+              icon={<DownloadOutlined />}
               onClick={() => handleDownload(selectedFile)}
-              className="flex-1 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600"
+              block
             >
-              ⬇️ 下载文件
-            </button>
+              下载文件
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

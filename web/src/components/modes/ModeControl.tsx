@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Form, Switch, Select, Spin, Typography } from "antd";
+
+const { Text } = Typography;
 
 interface Modes {
   plan: string;
@@ -59,115 +62,87 @@ export function ModeControl() {
   };
 
   if (loading) {
-    return <div className="text-sm text-gray-500">加载中...</div>;
+    return (
+      <div style={{ textAlign: "center", padding: "20px 0" }}>
+        <Spin size="small" />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
+    <Form layout="vertical" size="small">
       {/* Plan Mode - 三态选择 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <span className="text-sm font-medium text-gray-700">计划模式</span>
-          <p className="text-xs text-gray-500">控制任务规划行为</p>
-        </div>
-        <select
+      <Form.Item
+        label={<Text strong>计划模式</Text>}
+        extra={<Text type="secondary" style={{ fontSize: 12 }}>控制任务规划行为</Text>}
+        style={{ marginBottom: 16 }}
+      >
+        <Select
           value={modes.plan}
-          onChange={(e) => updateMode("plan", e.target.value)}
-          className="rounded border px-2 py-1 text-sm"
-        >
-          <option value="off">关闭</option>
-          <option value="on">开启</option>
-          <option value="auto">自动</option>
-        </select>
-      </div>
+          onChange={(v) => updateMode("plan", v)}
+          options={[
+            { value: "off", label: "关闭" },
+            { value: "on", label: "开启" },
+            { value: "auto", label: "自动" },
+          ]}
+          style={{ width: 100 }}
+        />
+      </Form.Item>
 
       {/* Auto Execute - 开关 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <span className="text-sm font-medium text-gray-700">自动执行</span>
-          <p className="text-xs text-gray-500">自动执行工具调用</p>
-        </div>
-        <ToggleSwitch
-          checked={modes.auto}
-          onChange={(v) => updateMode("auto", v)}
-        />
-      </div>
+      <Form.Item
+        label={<Text strong>自动执行</Text>}
+        extra={<Text type="secondary" style={{ fontSize: 12 }}>自动执行工具调用</Text>}
+        style={{ marginBottom: 16 }}
+      >
+        <Switch checked={modes.auto} onChange={(v) => updateMode("auto", v)} />
+      </Form.Item>
 
       {/* Safe Mode - 开关 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <span className="text-sm font-medium text-gray-700">安全模式</span>
-          <p className="text-xs text-gray-500">限制危险 SQL 操作</p>
-        </div>
-        <ToggleSwitch
-          checked={modes.safe}
-          onChange={(v) => updateMode("safe", v)}
-        />
-      </div>
+      <Form.Item
+        label={<Text strong>安全模式</Text>}
+        extra={<Text type="secondary" style={{ fontSize: 12 }}>限制危险 SQL 操作</Text>}
+        style={{ marginBottom: 16 }}
+      >
+        <Switch checked={modes.safe} onChange={(v) => updateMode("safe", v)} />
+      </Form.Item>
 
       {/* Verbose - 开关 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <span className="text-sm font-medium text-gray-700">详细输出</span>
-          <p className="text-xs text-gray-500">显示详细思考过程</p>
-        </div>
-        <ToggleSwitch
-          checked={modes.verbose}
-          onChange={(v) => updateMode("verbose", v)}
-        />
-      </div>
+      <Form.Item
+        label={<Text strong>详细输出</Text>}
+        extra={<Text type="secondary" style={{ fontSize: 12 }}>显示详细思考过程</Text>}
+        style={{ marginBottom: 16 }}
+      >
+        <Switch checked={modes.verbose} onChange={(v) => updateMode("verbose", v)} />
+      </Form.Item>
 
       {/* Preview Limit - 选择 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <span className="text-sm font-medium text-gray-700">预览行数</span>
-          <p className="text-xs text-gray-500">数据预览的最大行数</p>
-        </div>
-        <select
+      <Form.Item
+        label={<Text strong>预览行数</Text>}
+        extra={<Text type="secondary" style={{ fontSize: 12 }}>数据预览的最大行数</Text>}
+        style={{ marginBottom: 16 }}
+      >
+        <Select
           value={modes.preview}
-          onChange={(e) => updateMode("preview", e.target.value)}
-          className="rounded border px-2 py-1 text-sm"
-        >
-          <option value="10">10 行</option>
-          <option value="50">50 行</option>
-          <option value="100">100 行</option>
-          <option value="all">全部</option>
-        </select>
-      </div>
+          onChange={(v) => updateMode("preview", v)}
+          options={[
+            { value: "10", label: "10 行" },
+            { value: "50", label: "50 行" },
+            { value: "100", label: "100 行" },
+            { value: "all", label: "全部" },
+          ]}
+          style={{ width: 100 }}
+        />
+      </Form.Item>
 
       {/* Export Mode - 开关 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <span className="text-sm font-medium text-gray-700">自动导出</span>
-          <p className="text-xs text-gray-500">自动保存结果到文件</p>
-        </div>
-        <ToggleSwitch
-          checked={modes.export}
-          onChange={(v) => updateMode("export", v)}
-        />
-      </div>
-    </div>
-  );
-}
-
-interface ToggleSwitchProps {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}
-
-function ToggleSwitch({ checked, onChange }: ToggleSwitchProps) {
-  return (
-    <button
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-        checked ? "bg-blue-600" : "bg-gray-200"
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-          checked ? "translate-x-6" : "translate-x-1"
-        }`}
-      />
-    </button>
+      <Form.Item
+        label={<Text strong>自动导出</Text>}
+        extra={<Text type="secondary" style={{ fontSize: 12 }}>自动保存结果到文件</Text>}
+        style={{ marginBottom: 0 }}
+      >
+        <Switch checked={modes.export} onChange={(v) => updateMode("export", v)} />
+      </Form.Item>
+    </Form>
   );
 }

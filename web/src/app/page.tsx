@@ -1,5 +1,6 @@
 "use client";
 
+import { Layout } from "antd";
 import { Sidebar } from "@/components/sidebar/Sidebar";
 import { Workspace } from "@/components/workspace/Workspace";
 import { Header } from "@/components/Header";
@@ -7,28 +8,41 @@ import { WorkspaceProvider } from "@/hooks/useWorkspaceContext";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { SessionProvider } from "@/providers/SessionProvider";
 
+const { Sider, Content } = Layout;
+
 export default function Home() {
   return (
     <SessionProvider>
       <WorkspaceProvider>
-        <div className="flex h-screen flex-col bg-gray-50">
-          {/* Header */}
+        <Layout style={{ height: "100vh" }}>
+          {/* 顶部导航 */}
           <Header />
 
-          {/* Main Content */}
-          <div className="flex flex-1 overflow-hidden">
-            {/* 左侧边栏 */}
-            <Sidebar className="w-64 border-r bg-white" />
+          <Layout>
+            {/* 左侧数据库浏览器 */}
+            <Sider
+              width={256}
+              theme="light"
+              style={{ borderRight: "1px solid #f0f0f0" }}
+            >
+              <Sidebar />
+            </Sider>
 
-            {/* 主/副工作区 */}
-            <main className="flex-1 overflow-hidden">
+            {/* 主工作区 */}
+            <Content style={{ overflow: "hidden" }}>
               <Workspace />
-            </main>
+            </Content>
 
-            {/* 聊天侧边栏 - AI 对话 */}
-            <ChatSidebar className="w-96" />
-          </div>
-        </div>
+            {/* 右侧聊天面板 */}
+            <Sider
+              width={384}
+              theme="light"
+              style={{ borderLeft: "1px solid #f0f0f0" }}
+            >
+              <ChatSidebar />
+            </Sider>
+          </Layout>
+        </Layout>
       </WorkspaceProvider>
     </SessionProvider>
   );

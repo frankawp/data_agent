@@ -1,78 +1,121 @@
 "use client";
 
 import { useState } from "react";
+import { Layout, Space, Button, Badge, Dropdown, Card, Typography, Modal } from "antd";
+import { SettingOutlined, PlusOutlined, CloseOutlined } from "@ant-design/icons";
 import { ModeControl } from "./modes/ModeControl";
 import { useSession } from "@/providers/SessionProvider";
+
+const { Header: AntHeader } = Layout;
+const { Text } = Typography;
 
 export function Header() {
   const { sessionId, resetSession, isLoading } = useSession();
   const [showModes, setShowModes] = useState(false);
 
   const handleNewSession = async () => {
-    if (confirm("确定要开启新会话吗？当前会话的数据将被保留，但您将切换到一个全新的会话。")) {
-      await resetSession();
-      window.location.reload();
-    }
+    Modal.confirm({
+      title: "确定要开启新会话吗？",
+      content: "当前会话的数据将被保留，但您将切换到一个全新的会话。",
+      okText: "确定",
+      cancelText: "取消",
+      onOk: async () => {
+        await resetSession();
+        window.location.reload();
+      },
+    });
   };
 
+  // 模式设置下拉面板内容
+  const modeDropdownContent = (
+    <Card
+      title={
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>模式设置</span>
+          <Button
+            type="text"
+            size="small"
+            icon={<CloseOutlined />}
+            onClick={() => setShowModes(false)}
+          />
+        </div>
+      }
+      style={{ width: 320 }}
+      styles={{ header: { borderBottom: "1px solid #f0f0f0" }, body: { padding: 16 } }}
+    >
+      <ModeControl />
+    </Card>
+  );
+
   return (
-    <header className="flex h-14 items-center justify-between border-b bg-white px-4">
+    <AntHeader
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 16px",
+        borderBottom: "1px solid #f0f0f0",
+        height: 56,
+        lineHeight: "56px",
+      }}
+    >
       {/* Logo 和标题 */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white font-bold">
+      <Space size="middle">
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            background: "#2563eb",
+            color: "white",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontWeight: "bold",
+            fontSize: 14,
+          }}
+        >
           DA
         </div>
-        <h1 className="text-lg font-semibold text-gray-900">Data Agent</h1>
-      </div>
+        <Text strong style={{ fontSize: 18 }}>
+          Data Agent
+        </Text>
+      </Space>
 
-      {/* 会话信息 */}
-      <div className="flex items-center gap-4">
+      {/* 右侧操作区 */}
+      <Space size="large">
+        {/* 会话信息 */}
         {sessionId && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500">
+          <Space>
+            <Text type="secondary" style={{ fontSize: 14 }}>
               会话: {sessionId.slice(-8)}
-            </span>
-            <button
+            </Text>
+            <Button
+              size="small"
+              type="link"
+              icon={<PlusOutlined />}
               onClick={handleNewSession}
-              disabled={isLoading}
-              className="rounded px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50 disabled:opacity-50"
-              title="开启新会话"
+              loading={isLoading}
             >
               新建
-            </button>
-          </div>
+            </Button>
+          </Space>
         )}
 
         {/* 数据库状态 */}
-        <div className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-green-500"></span>
-          <span className="text-sm text-gray-600">已连接</span>
-        </div>
+        <Badge status="success" text="已连接" />
 
         {/* 模式设置按钮 */}
-        <button
-          onClick={() => setShowModes(!showModes)}
-          className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
+        <Dropdown
+          open={showModes}
+          onOpenChange={setShowModes}
+          popupRender={() => modeDropdownContent}
+          trigger={["click"]}
+          placement="bottomRight"
         >
-          模式设置
-        </button>
-      </div>
-
-      {/* 模式设置面板 */}
-      {showModes && (
-        <div className="absolute right-4 top-14 z-50 w-80 rounded-lg border bg-white p-4 shadow-lg">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-medium">模式设置</h3>
-            <button
-              onClick={() => setShowModes(false)}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          </div>
-          <ModeControl />
-        </div>
-      )}
-    </header>
+          <Button icon={<SettingOutlined />}>模式设置</Button>
+        </Dropdown>
+      </Space>
+    </AntHeader>
   );
 }
