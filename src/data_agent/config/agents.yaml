@@ -1,0 +1,98 @@
+# Agent 系统配置文件
+# 支持环境变量替换: ${VAR} 或 ${VAR:default}
+
+version: "1.0"
+
+# ==================== LLM 配置 ====================
+llm:
+  # 默认 LLM 配置（用于未指定 llm 的子代理）
+  default:
+    model: ${MODEL:deepseek-chat}
+    base_url: ${BASE_URL:https://api.deepseek.com}
+    api_key: ${API_KEY}
+    temperature: 0.7
+    max_tokens: 4096
+
+  # 命名 LLM 配置（供子代理引用）
+  profiles:
+    fast:
+      model: ${MODEL:deepseek-chat}
+      temperature: 0.5
+      max_tokens: 2048
+
+    powerful:
+      model: ${MODEL:deepseek-chat}
+      temperature: 0.8
+      max_tokens: 8192
+
+# ==================== 工具配置 ====================
+tools:
+  # 内置工具开关
+  builtin:
+    sql_tools: true
+    python_tools: true
+    ml_tools: true
+    graph_tools: true
+
+  # 工具别名（可选）
+  aliases:
+    db_query: execute_sql
+    run_python: execute_python_safe
+
+# ==================== 子代理配置 ====================
+subagents:
+  # 数据采集子代理
+  data-collector:
+    description: "从数据库采集数据。用于 SQL 查询、表结构探索、数据预览。当需要从数据库获取原始数据时，使用此代理。"
+    llm: fast
+    tools:
+      - list_tables
+      - describe_table
+      - execute_sql
+    prompt_file: prompts/data_collector.md
+
+  # 数据分析子代理
+  data-analyzer:
+    description: "分析数据并提取洞察。用于统计分析、机器学习建模、图/网络分析。当需要对数据进行深度分析、建模预测或发现规律时，使用此代理。"
+    llm: powerful
+    tools:
+      - execute_python_safe
+      - list_variables
+      - clear_variables
+      - export_dataframe
+      - export_text
+      - list_exports
+      - train_model
+      - predict
+      - list_models
+      - create_graph
+      - graph_analysis
+      - list_graphs
+    prompt_file: prompts/data_analyzer.md
+
+  # 报告生成子代理
+  report-writer:
+    description: "生成可视化图表和分析报告。用于创建数据可视化、格式化分析结果、生成专业报告。当需要生成图表或整理分析报告时，使用此代理。"
+    llm: default
+    tools:
+      - execute_python_safe
+      - list_variables
+      - clear_variables
+      - export_dataframe
+      - export_text
+      - list_exports
+    prompt_file: prompts/report_writer.md
+
+# ==================== 协调者配置 ====================
+coordinator:
+  llm: default
+  prompt_file: prompts/coordinator.md
+  use_default_prompt: true
+
+# ==================== 热重载配置 ====================
+hot_reload:
+  enabled: false
+  watch_paths:
+    - config/agents.yaml
+    - config/prompts/
+  debounce_ms: 1000

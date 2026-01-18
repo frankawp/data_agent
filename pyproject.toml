@@ -61,6 +61,10 @@ dependencies = [
     "python-dotenv>=1.2.0",
     "pydantic>=2.12.0",
     "pydantic-settings>=2.12.0",
+    "pyyaml>=6.0.0",
+
+    # 热重载
+    "watchdog>=4.0.0",
 
     # Token 计数
     "tiktoken>=0.12.0",

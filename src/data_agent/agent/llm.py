@@ -2,8 +2,10 @@
 LLM 封装
 
 支持所有 OpenAI API 兼容的模型（DeepSeek、智谱AI、OpenAI 等）。
+支持 LLM Profile 配置，允许为不同子代理指定不同模型。
 """
 
+import logging
 from typing import Optional, List, Any
 
 from langchain_openai import ChatOpenAI
@@ -11,6 +13,9 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 
 from ..config.settings import get_settings
+from ..config.schema import LLMProfile
+
+logger = logging.getLogger(__name__)
 
 
 def create_llm(
@@ -204,3 +209,52 @@ def get_llm() -> ChatOpenAI:
 def get_streaming_llm() -> ChatOpenAI:
     """获取流式输出LLM实例"""
     return create_llm(streaming=True)
+
+
+def create_llm_from_profile(profile: LLMProfile) -> ChatOpenAI:
+    """
+    根据 LLM Profile 创建实例
+
+    Profile 中未指定的参数会使用全局配置。
+
+    Args:
+        profile: LLM Profile 配置对象
+
+    Returns:
+        ChatOpenAI 实例
+    """
+    settings = get_settings()
+
+    return ChatOpenAI(
+        model=profile.model,
+        openai_api_key=profile.api_key or settings.api_key,
+        openai_api_base=profile.base_url or settings.base_url,
+        temperature=profile.temperature,
+        max_tokens=profile.max_tokens,
+    )
+
+
+def create_llm_factory():
+    """
+    创建 LLM 工厂函数
+
+    返回一个函数，根据 profile 名称创建 LLM 实例。
+    用于子代理工厂的 llm_factory 参数。
+
+    Returns:
+        工厂函数: (profile_name: str) -> ChatOpenAI
+    """
+    from ..config.loader import get_agent_config
+
+    def factory(profile_name: str) -> Optional[ChatOpenAI]:
+        """根据 profile 名称创建 LLM"""
+        config = get_agent_config()
+        profile = config.get_llm_profile(profile_name)
+
+        if profile:
+            return create_llm_from_profile(profile)
+
+        logger.warning(f"LLM Profile 不存在: {profile_name}，使用默认配置")
+        return create_llm()
+
+    return factory

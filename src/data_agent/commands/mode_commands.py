@@ -256,17 +256,6 @@ class ClearCommand(Command):
         return False
 
 
-class ConfigCommand(Command):
-    """显示配置"""
-
-    name = "config"
-    description = "显示当前配置"
-
-    def execute(self, args: List[str], console: Console) -> bool:
-        # 这个命令需要访问 settings，将在 main.py 中特殊处理
-        return False
-
-
 class ResetCommand(Command):
     """重置所有模式"""
 
@@ -286,6 +275,8 @@ class ResetCommand(Command):
 
 def register_all_commands() -> None:
     """注册所有命令"""
+    from .reload_command import ReloadCommand, ConfigCommand as NewConfigCommand
+
     registry = get_registry()
 
     # 模式命令
@@ -301,4 +292,7 @@ def register_all_commands() -> None:
     # 系统命令
     registry.register(HelpCommand())
     registry.register(ClearCommand())
-    registry.register(ConfigCommand())
+
+    # 配置命令（使用新的实现）
+    registry.register(NewConfigCommand())
+    registry.register(ReloadCommand())
