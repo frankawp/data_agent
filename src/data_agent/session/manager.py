@@ -81,6 +81,9 @@ class SessionManager:
         self.session_dir = self.SESSIONS_DIR / self.session_id
         self.export_dir = self.session_dir / "exports"
         self.workspace_dir = self.session_dir / "workspace"
+        self.import_dir = self.session_dir / "imports"
+        self.dagster_dir = self.session_dir / "dagster"
+        self.dagster_jobs_dir = self.dagster_dir / "jobs"
 
         # 沙箱可用状态（会话级别）
         self._sandbox_unavailable = False
@@ -120,6 +123,8 @@ class SessionManager:
         """创建会话所需的目录"""
         self.export_dir.mkdir(parents=True, exist_ok=True)
         self.workspace_dir.mkdir(parents=True, exist_ok=True)
+        self.import_dir.mkdir(parents=True, exist_ok=True)
+        self.dagster_jobs_dir.mkdir(parents=True, exist_ok=True)
 
     def _cleanup_old_sessions(self) -> None:
         """
@@ -258,6 +263,40 @@ class SessionManager:
         if not self.export_dir.exists():
             return []
         return sorted(self.export_dir.iterdir())
+
+    def list_imports(self) -> list[Path]:
+        """
+        列出当前会话的所有导入文件
+
+        Returns:
+            导入文件路径列表
+        """
+        if not self.import_dir.exists():
+            return []
+        return sorted(f for f in self.import_dir.iterdir() if f.is_file())
+
+    def get_import_path(self, filename: str) -> Path:
+        """
+        获取导入文件的完整路径
+
+        Args:
+            filename: 文件名
+
+        Returns:
+            完整的文件路径
+        """
+        return self.import_dir / filename
+
+    def list_dagster_jobs(self) -> list[Path]:
+        """
+        列出当前会话的所有 Dagster job 文件
+
+        Returns:
+            job 文件路径列表
+        """
+        if not self.dagster_jobs_dir.exists():
+            return []
+        return sorted(f for f in self.dagster_jobs_dir.iterdir() if f.suffix == ".py")
 
     def cleanup(self) -> None:
         """

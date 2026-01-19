@@ -67,6 +67,16 @@ class ToolRegistry:
             "module": "data_agent.tools.graph_tools",
             "tools": ["create_graph", "graph_analysis", "list_graphs"],
         },
+        "dagster_tools": {
+            "module": "data_agent.tools.dagster_tools",
+            "tools": [
+                "list_preset_ops",
+                "list_import_files",
+                "generate_dag_code",
+                "execute_dag_job",
+                "list_dag_jobs",
+            ],
+        },
     }
 
     _instance: Optional["ToolRegistry"] = None

@@ -33,6 +33,7 @@ tools:
     python_tools: true
     ml_tools: true
     graph_tools: false  # 禁用图分析工具（使用 execute_python_safe + networkx 替代）
+    dagster_tools: true  # 数据处理管道工具
 
   # 工具别名（可选）
   aliases:
@@ -40,10 +41,19 @@ tools:
     run_python: execute_python_safe
 
 # ==================== 子代理配置 ====================
+# 所有 agent 共同规范：
+# - 工作前先 ls /imports/ 和 /exports/ 查看可用文件
+# - 使用内置 read_file 读取文件，write_file 写入 /exports/
+# - 不写入 /imports/（只读目录）
+# - exports 命名规范：{来源}_{处理类型}_{描述}.{ext}
+
 subagents:
   # 数据采集子代理
   data-collector:
-    description: "从数据库采集数据。用于 SQL 查询、表结构探索、数据预览。当需要从数据库获取原始数据时，使用此代理。"
+    description: |
+      数据采集代理。从数据库或 /imports/ 获取数据，导出到 /exports/。
+      工作前先 ls /imports/ 和 /exports/ 查看文件。
+      使用内置 read_file/write_file 操作文件。
     llm: fast
     tools:
       - list_tables
@@ -53,7 +63,10 @@ subagents:
 
   # 数据分析子代理
   data-analyzer:
-    description: "分析数据并提取洞察。用于统计分析、机器学习建模。使用内置 read_file/write_file 访问 /exports/ 目录。"
+    description: |
+      数据分析代理。从 /imports/ 或 /exports/ 读取数据进行分析。
+      工作前先 ls /imports/ 和 /exports/ 查看文件。
+      分析结果保存到 /exports/。
     llm: powerful
     tools:
       - execute_python_safe
@@ -63,11 +76,28 @@ subagents:
 
   # 报告生成子代理
   report-writer:
-    description: "生成可视化图表和分析报告。使用 matplotlib/seaborn 生成图表，保存到 /exports/ 目录。"
+    description: |
+      报告生成代理。从 /imports/ 或 /exports/ 读取数据生成图表和报告。
+      工作前先 ls /imports/ 和 /exports/ 查看文件。
+      图表和报告保存到 /exports/。
     llm: default
     tools:
       - execute_python_safe
     prompt_file: prompts/report_writer.md
+
+  # 数据处理子代理
+  data-processor:
+    description: |
+      数据处理代理。从 /imports/ 或 /exports/ 读取数据进行处理。
+      工作前先 ls /imports/ 和 /exports/ 查看文件。
+      使用 Dagster 工具构建处理管道，结果保存到 /exports/。
+    llm: powerful
+    tools:
+      - list_preset_ops
+      - generate_dag_code
+      - execute_dag_job
+      - list_dag_jobs
+    prompt_file: prompts/data_processor.md
 
 # ==================== 协调者配置 ====================
 coordinator:

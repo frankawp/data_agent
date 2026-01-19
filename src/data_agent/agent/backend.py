@@ -4,6 +4,8 @@ DeepAgents 后端配置
 使用 CompositeBackend 将虚拟路径映射到实际会话目录：
 - /exports/ → 会话导出目录（持久化）
 - /workspace/ → 会话工作目录（持久化）
+- /imports/ → 会话导入目录（用户上传的文件）
+- /dagster/ → 会话 Dagster 目录（DAG 代码文件）
 - 其他路径 → StateBackend（临时虚拟文件系统）
 """
 
@@ -20,6 +22,7 @@ def create_session_backend(runtime) -> BackendProtocol:
     根据当前会话动态创建 CompositeBackend：
     - /exports/ 路由到会话的 export_dir（FilesystemBackend）
     - /workspace/ 路由到会话的 workspace_dir（FilesystemBackend）
+    - /imports/ 路由到会话的 import_dir（FilesystemBackend）
     - 其他路径使用默认的 StateBackend
 
     Args:
@@ -45,11 +48,23 @@ def create_session_backend(runtime) -> BackendProtocol:
         virtual_mode=True,
     )
 
+    imports_backend = FilesystemBackend(
+        root_dir=session.import_dir,
+        virtual_mode=True,
+    )
+
+    dagster_backend = FilesystemBackend(
+        root_dir=session.dagster_dir,
+        virtual_mode=True,
+    )
+
     # 创建组合后端
     return CompositeBackend(
         default=StateBackend(runtime),
         routes={
             "/exports/": exports_backend,
             "/workspace/": workspace_backend,
+            "/imports/": imports_backend,
+            "/dagster/": dagster_backend,
         },
     )

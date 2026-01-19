@@ -33,6 +33,7 @@ dependencies = [
     # Web API
     "fastapi>=0.115.0",
     "uvicorn>=0.40.0",
+    "python-multipart>=0.0.9",  # 文件上传支持
 
     # CLI
     "rich>=14.0.0",
@@ -47,6 +48,7 @@ dependencies = [
     "pandas>=2.3.0",
     "numpy>=2.4.0",
     "scipy>=1.16.0",
+    "openpyxl>=3.1.0",  # Excel 文件读写支持
 
     # 机器学习
     "scikit-learn>=1.8.0",
