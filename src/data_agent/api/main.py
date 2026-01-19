@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .chat import router as chat_router
+from .websocket import router as websocket_router
 from .routes import modes_router, database_router, sessions_router
 
 # 创建 FastAPI 应用
@@ -44,6 +45,7 @@ app.include_router(chat_router, prefix="/api", tags=["chat"])
 app.include_router(modes_router, prefix="/api/modes", tags=["modes"])
 app.include_router(database_router, prefix="/api/database", tags=["database"])
 app.include_router(sessions_router, prefix="/api/sessions", tags=["sessions"])
+app.include_router(websocket_router, prefix="/api", tags=["websocket"])
 
 
 @app.get("/")

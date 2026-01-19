@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AntdRegistry } from "@ant-design/nextjs-registry";
-import { ConfigProvider } from "antd";
-import zhCN from "antd/locale/zh_CN";
 import "@ant-design/v5-patch-for-react-19";
+import { ThemeProvider } from "@/providers/ThemeProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -22,26 +21,6 @@ export const metadata: Metadata = {
     "基于 AI 的智能数据分析工具，支持 SQL 查询、Python 执行、机器学习和图分析",
 };
 
-// Ant Design 主题配置
-const theme = {
-  token: {
-    colorPrimary: "#2563eb", // blue-600，保持原有蓝色
-    borderRadius: 8,
-    fontFamily:
-      "var(--font-geist-sans), -apple-system, BlinkMacSystemFont, sans-serif",
-  },
-  components: {
-    Layout: {
-      headerBg: "#ffffff",
-      siderBg: "#ffffff",
-      bodyBg: "#f9fafb", // gray-50
-    },
-    Menu: {
-      itemBg: "transparent",
-    },
-  },
-};
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -54,9 +33,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <AntdRegistry>
-          <ConfigProvider locale={zhCN} theme={theme}>
-            {children}
-          </ConfigProvider>
+          <ThemeProvider>{children}</ThemeProvider>
         </AntdRegistry>
       </body>
     </html>

@@ -1,16 +1,39 @@
 "use client";
 
 import { useState } from "react";
-import { Layout, Space, Button, Badge, Dropdown, Card, Typography, Modal } from "antd";
-import { SettingOutlined, PlusOutlined, CloseOutlined } from "@ant-design/icons";
+import {
+  Layout,
+  Space,
+  Button,
+  Badge,
+  Dropdown,
+  Card,
+  Typography,
+  Modal,
+  Tooltip,
+  theme,
+  Segmented,
+} from "antd";
+import {
+  SettingOutlined,
+  PlusOutlined,
+  CloseOutlined,
+  SunOutlined,
+  MoonOutlined,
+  DesktopOutlined,
+  DatabaseOutlined,
+} from "@ant-design/icons";
 import { ModeControl } from "./modes/ModeControl";
 import { useSession } from "@/providers/SessionProvider";
+import { useTheme } from "@/providers/ThemeProvider";
 
 const { Header: AntHeader } = Layout;
 const { Text } = Typography;
 
 export function Header() {
   const { sessionId, resetSession, isLoading } = useSession();
+  const { mode, setMode, isDark } = useTheme();
+  const { token } = theme.useToken();
   const [showModes, setShowModes] = useState(false);
 
   const handleNewSession = async () => {
@@ -26,11 +49,24 @@ export function Header() {
     });
   };
 
+  // 主题选项
+  const themeOptions = [
+    { label: <SunOutlined />, value: "light" },
+    { label: <DesktopOutlined />, value: "system" },
+    { label: <MoonOutlined />, value: "dark" },
+  ];
+
   // 模式设置下拉面板内容
   const modeDropdownContent = (
     <Card
       title={
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <span>模式设置</span>
           <Button
             type="text"
@@ -40,8 +76,15 @@ export function Header() {
           />
         </div>
       }
-      style={{ width: 320 }}
-      styles={{ header: { borderBottom: "1px solid #f0f0f0" }, body: { padding: 16 } }}
+      style={{
+        width: 320,
+        boxShadow: token.boxShadowSecondary,
+        border: `1px solid ${token.colorBorderSecondary}`,
+      }}
+      styles={{
+        header: { borderBottom: `1px solid ${token.colorBorderSecondary}` },
+        body: { padding: token.padding },
+      }}
     >
       <ModeControl />
     </Card>
@@ -53,57 +96,93 @@ export function Header() {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 16px",
-        borderBottom: "1px solid #f0f0f0",
+        padding: `0 ${token.paddingLG}px`,
+        borderBottom: `1px solid ${token.colorBorderSecondary}`,
         height: 56,
         lineHeight: "56px",
+        background: token.colorBgContainer,
+        transition: "all 0.25s ease",
       }}
     >
       {/* Logo 和标题 */}
-      <Space size="middle">
+      <Space size="middle" align="center">
         <div
+          className="gradient-primary"
           style={{
-            width: 32,
-            height: 32,
-            borderRadius: 8,
-            background: "#2563eb",
+            width: 36,
+            height: 36,
+            borderRadius: token.borderRadiusLG,
             color: "white",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontWeight: "bold",
             fontSize: 14,
+            boxShadow: "0 2px 8px rgba(37, 99, 235, 0.3)",
           }}
         >
           DA
         </div>
-        <Text strong style={{ fontSize: 18 }}>
-          Data Agent
-        </Text>
+        <div>
+          <Text strong style={{ fontSize: 18, display: "block", lineHeight: 1.2 }}>
+            Data Agent
+          </Text>
+          <Text type="secondary" style={{ fontSize: 12, lineHeight: 1 }}>
+            智能数据分析助手
+          </Text>
+        </div>
       </Space>
 
       {/* 右侧操作区 */}
-      <Space size="large">
+      <Space size="middle">
         {/* 会话信息 */}
         {sessionId && (
-          <Space>
-            <Text type="secondary" style={{ fontSize: 14 }}>
-              会话: {sessionId.slice(-8)}
+          <Space
+            style={{
+              background: token.colorFillTertiary,
+              padding: `${token.paddingXS}px ${token.paddingSM}px`,
+              borderRadius: token.borderRadius,
+            }}
+          >
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              会话: <code style={{ fontFamily: "var(--font-geist-mono)" }}>{sessionId.slice(-8)}</code>
             </Text>
-            <Button
-              size="small"
-              type="link"
-              icon={<PlusOutlined />}
-              onClick={handleNewSession}
-              loading={isLoading}
-            >
-              新建
-            </Button>
+            <Tooltip title="新建会话">
+              <Button
+                size="small"
+                type="text"
+                icon={<PlusOutlined />}
+                onClick={handleNewSession}
+                loading={isLoading}
+              />
+            </Tooltip>
           </Space>
         )}
 
         {/* 数据库状态 */}
-        <Badge status="success" text="已连接" />
+        <Tooltip title="数据库连接状态">
+          <Badge
+            status="success"
+            text={
+              <Space size={4}>
+                <DatabaseOutlined style={{ color: token.colorTextSecondary }} />
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                  已连接
+                </Text>
+              </Space>
+            }
+          />
+        </Tooltip>
+
+        {/* 主题切换 */}
+        <Tooltip title="主题模式">
+          <Segmented
+            value={mode}
+            onChange={(value) => setMode(value as "light" | "dark" | "system")}
+            options={themeOptions}
+            size="small"
+          />
+        </Tooltip>
 
         {/* 模式设置按钮 */}
         <Dropdown
@@ -113,7 +192,14 @@ export function Header() {
           trigger={["click"]}
           placement="bottomRight"
         >
-          <Button icon={<SettingOutlined />}>模式设置</Button>
+          <Button
+            icon={<SettingOutlined />}
+            style={{
+              borderRadius: token.borderRadius,
+            }}
+          >
+            模式设置
+          </Button>
         </Dropdown>
       </Space>
     </AntHeader>

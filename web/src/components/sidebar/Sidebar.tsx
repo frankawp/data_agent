@@ -1,12 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Menu, Spin, Typography } from "antd";
-import { TableOutlined, DatabaseOutlined, EyeOutlined } from "@ant-design/icons";
+import { Menu, Spin, Typography, Empty, theme, Badge } from "antd";
+import {
+  TableOutlined,
+  DatabaseOutlined,
+  EyeOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { useWorkspace } from "@/hooks/useWorkspaceContext";
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
 interface TableInfo {
   name: string;
@@ -17,9 +22,10 @@ export function Sidebar() {
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const { setSecondaryContent, setActiveTab } = useWorkspace();
+  const { token } = theme.useToken();
 
   // 加载数据库表
-  useEffect(() => {
+  const loadTables = () => {
     setLoading(true);
     fetch("/api/database/tables")
       .then((r) => r.json())
@@ -41,6 +47,10 @@ export function Sidebar() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadTables();
   }, []);
 
   const handleTableClick = (tableName: string) => {
@@ -55,15 +65,45 @@ export function Sidebar() {
   const menuItems: MenuProps["items"] = [
     {
       key: "database",
-      icon: <DatabaseOutlined />,
-      label: "数据库浏览器",
+      icon: <DatabaseOutlined style={{ color: token.colorPrimary }} />,
+      label: (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span style={{ fontWeight: 500 }}>数据库浏览器</span>
+          <Badge
+            count={tables.length}
+            showZero
+            style={{
+              backgroundColor: token.colorFillSecondary,
+              color: token.colorTextSecondary,
+              fontSize: 11,
+            }}
+          />
+        </div>
+      ),
       children: loading
         ? [
             {
               key: "loading",
               label: (
-                <div style={{ padding: "8px 0", textAlign: "center" }}>
+                <div
+                  style={{
+                    padding: `${token.paddingLG}px 0`,
+                    textAlign: "center",
+                  }}
+                >
                   <Spin size="small" />
+                  <Text
+                    type="secondary"
+                    style={{ display: "block", marginTop: token.marginSM, fontSize: 12 }}
+                  >
+                    加载表列表...
+                  </Text>
                 </div>
               ),
               disabled: true,
@@ -74,30 +114,90 @@ export function Sidebar() {
               {
                 key: "empty",
                 label: (
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    未连接数据库
-                  </Text>
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        未连接数据库
+                      </Text>
+                    }
+                    style={{ padding: `${token.paddingLG}px 0` }}
+                  />
                 ),
                 disabled: true,
               },
             ]
           : tables.map((table) => ({
               key: table.name,
-              icon: table.type === "view" ? <EyeOutlined /> : <TableOutlined />,
-              label: table.name,
+              icon:
+                table.type === "view" ? (
+                  <EyeOutlined style={{ color: token.colorWarning }} />
+                ) : (
+                  <TableOutlined style={{ color: token.colorSuccess }} />
+                ),
+              label: (
+                <span
+                  style={{
+                    fontSize: 13,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {table.name}
+                </span>
+              ),
               onClick: () => handleTableClick(table.name),
             })),
     },
   ];
 
   return (
-    <div style={{ height: "100%", overflow: "auto", paddingTop: 8 }}>
-      <Menu
-        mode="inline"
-        defaultOpenKeys={["database"]}
-        items={menuItems}
-        style={{ border: "none", background: "transparent" }}
-      />
+    <div
+      style={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      {/* 标题栏 */}
+      <div
+        style={{
+          padding: `${token.paddingSM}px ${token.padding}px`,
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Title level={5} style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>
+          数据源
+        </Title>
+        <ReloadOutlined
+          onClick={loadTables}
+          spin={loading}
+          style={{
+            cursor: "pointer",
+            color: token.colorTextSecondary,
+            fontSize: 14,
+            transition: "color 0.2s",
+          }}
+        />
+      </div>
+
+      {/* 菜单区域 */}
+      <div style={{ flex: 1, overflow: "auto", padding: `${token.paddingSM}px 0` }}>
+        <Menu
+          mode="inline"
+          defaultOpenKeys={["database"]}
+          items={menuItems}
+          style={{
+            border: "none",
+            background: "transparent",
+          }}
+        />
+      </div>
     </div>
   );
 }

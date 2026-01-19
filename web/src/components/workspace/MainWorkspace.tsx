@@ -18,6 +18,7 @@ import {
   Timeline,
   Alert,
   List,
+  theme,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -32,6 +33,7 @@ import {
   HistoryOutlined,
   OrderedListOutlined,
   ClockCircleOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons";
 import { useWorkspace, StreamingStep, SubagentStep } from "@/hooks/useWorkspaceContext";
 import ReactMarkdown from "react-markdown";
@@ -91,21 +93,32 @@ export function MainWorkspace() {
     }
   }, [isStreaming, streamingSteps.length, scrollToBottom]);
 
+  const { token } = theme.useToken();
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#fff" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        background: token.colorBgContainer,
+        transition: "background 0.25s ease",
+        position: "relative",
+      }}
+    >
       {/* 标题栏 */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "12px 16px",
-          borderBottom: "1px solid #f0f0f0",
-          background: "#fafafa",
+          padding: `${token.paddingSM}px ${token.padding}px`,
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          background: token.colorFillTertiary,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <CodeOutlined style={{ fontSize: 16, color: "#2563eb" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: token.marginSM }}>
+          <ThunderboltOutlined style={{ fontSize: 16, color: token.colorPrimary }} />
           <Text strong>实时输出</Text>
           {isStreaming && <Badge status="processing" text="执行中" />}
         </div>
@@ -135,7 +148,7 @@ export function MainWorkspace() {
           setIsAtBottom(atBottom);
           if (atBottom) setHasNewContent(false);
         }}
-        style={{ flex: 1, overflow: "auto", padding: 16 }}
+        style={{ flex: 1, overflow: "auto", padding: token.padding }}
       >
         {viewMode === "live" ? (
           isStreaming || streamingSteps.length > 0 ? (
@@ -154,13 +167,16 @@ export function MainWorkspace() {
           type="primary"
           icon={<ArrowDownOutlined />}
           onClick={scrollToBottom}
+          className="animate-bounce"
           style={{
             position: "absolute",
             bottom: 24,
             left: "50%",
             transform: "translateX(-50%)",
             borderRadius: 20,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            boxShadow: token.boxShadowSecondary,
+            paddingLeft: 16,
+            paddingRight: 16,
           }}
         >
           有新内容
@@ -191,26 +207,42 @@ function getToolInfo(toolName: string) {
 
 // 流式执行内容
 function StreamingContent({ steps, isStreaming }: { steps: StreamingStep[]; isStreaming: boolean }) {
+  const { token } = theme.useToken();
+
   if (steps.length === 0 && isStreaming) {
     return (
-      <Empty
-        image={<Spin size="large" />}
-        description={
-          <Text type="secondary" style={{ fontSize: 16 }}>
-            AI 正在分析任务...
-          </Text>
-        }
-        style={{ marginTop: 100 }}
-      />
+      <div
+        className="animate-fade-in"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100%",
+          minHeight: 300,
+        }}
+      >
+        <Spin size="large" />
+        <Text type="secondary" style={{ fontSize: 16, marginTop: token.marginLG }}>
+          AI 正在分析任务...
+        </Text>
+      </div>
     );
   }
 
   const completedCount = steps.filter((s) => s.status === "completed").length;
 
   return (
-    <div>
+    <div className="animate-fade-in">
       {/* 进度概览 */}
-      <Card size="small" style={{ marginBottom: 16 }}>
+      <Card
+        size="small"
+        style={{
+          marginBottom: token.margin,
+          borderRadius: token.borderRadiusLG,
+          boxShadow: token.boxShadow,
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <Title level={5} style={{ margin: 0 }}>
             执行步骤 ({completedCount}/{steps.length})
@@ -229,11 +261,11 @@ function StreamingContent({ steps, isStreaming }: { steps: StreamingStep[]; isSt
           const info = getToolInfo(step.toolName);
           const statusIcon =
             step.status === "completed" ? (
-              <CheckCircleOutlined style={{ color: "#52c41a" }} />
+              <CheckCircleOutlined style={{ color: token.colorSuccess }} />
             ) : step.status === "error" ? (
-              <CloseCircleOutlined style={{ color: "#ff4d4f" }} />
+              <CloseCircleOutlined style={{ color: token.colorError }} />
             ) : (
-              <LoadingOutlined style={{ color: "#1890ff" }} />
+              <LoadingOutlined style={{ color: token.colorPrimary }} />
             );
 
           return {
@@ -247,19 +279,42 @@ function StreamingContent({ steps, isStreaming }: { steps: StreamingStep[]; isSt
 }
 
 // 步骤卡片
-function StepCard({ step, info }: { step: StreamingStep; info: { name: string; icon: React.ReactNode; color: string } }) {
+function StepCard({
+  step,
+  info,
+}: {
+  step: StreamingStep;
+  info: { name: string; icon: React.ReactNode; color: string };
+}) {
+  const { token } = theme.useToken();
   const borderColor =
-    step.status === "completed" ? "#52c41a" : step.status === "error" ? "#ff4d4f" : "#1890ff";
+    step.status === "completed"
+      ? token.colorSuccess
+      : step.status === "error"
+        ? token.colorError
+        : token.colorPrimary;
 
   return (
     <Card
       size="small"
-      style={{ borderLeft: `3px solid ${borderColor}`, marginBottom: 8 }}
-      styles={{ body: { padding: "12px 16px" } }}
+      className="animate-fade-in-up"
+      style={{
+        borderLeft: `3px solid ${borderColor}`,
+        marginBottom: token.marginSM,
+        borderRadius: token.borderRadius,
+      }}
+      styles={{ body: { padding: `${token.paddingSM}px ${token.padding}px` } }}
     >
       {/* 步骤头部 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: token.marginSM,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: token.marginSM }}>
           <Tag color={info.color} icon={info.icon}>
             {info.name}
           </Tag>
@@ -280,8 +335,15 @@ function StepCard({ step, info }: { step: StreamingStep; info: { name: string; i
 
       {/* 子代理步骤 */}
       {step.toolName === "task" && step.subagentSteps && step.subagentSteps.length > 0 && (
-        <div style={{ marginTop: 12, marginLeft: 16, borderLeft: "2px solid #e6f4ff", paddingLeft: 12 }}>
-          <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 8 }}>
+        <div
+          style={{
+            marginTop: token.marginSM,
+            marginLeft: token.margin,
+            borderLeft: `2px solid ${token.colorInfoBg}`,
+            paddingLeft: token.paddingSM,
+          }}
+        >
+          <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: token.marginSM }}>
             <RobotOutlined style={{ marginRight: 4 }} />
             {step.subagentName || "子代理"} 执行步骤:
           </Text>
@@ -293,8 +355,14 @@ function StepCard({ step, info }: { step: StreamingStep; info: { name: string; i
 
       {/* 执行结果 */}
       {step.result && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #f0f0f0" }}>
-          <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 8 }}>
+        <div
+          style={{
+            marginTop: token.marginSM,
+            paddingTop: token.paddingSM,
+            borderTop: `1px solid ${token.colorBorderSecondary}`,
+          }}
+        >
+          <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: token.marginSM }}>
             执行结果:
           </Text>
           <StepResultDisplay toolName={step.toolName} result={step.result} />
@@ -768,21 +836,47 @@ function StepResultDisplay({ toolName, result }: { toolName: string; result: str
 }
 
 // 空闲状态内容
-function LiveContent({ toolResult }: { toolResult: { toolName: string; args: Record<string, unknown>; result: string } | null }) {
+function LiveContent({
+  toolResult,
+}: {
+  toolResult: { toolName: string; args: Record<string, unknown>; result: string } | null;
+}) {
+  const { token } = theme.useToken();
+
   if (!toolResult) {
     return (
-      <Empty
-        image={<CodeOutlined style={{ fontSize: 64, color: "#d9d9d9" }} />}
-        description={
-          <div style={{ textAlign: "center" }}>
-            <Title level={4} style={{ color: "#8c8c8c" }}>
-              等待 AI 执行操作
-            </Title>
-            <Text type="secondary">与右侧的数据分析助手对话，这里将显示执行的具体内容</Text>
-          </div>
-        }
-        style={{ marginTop: 100 }}
-      />
+      <div
+        className="animate-fade-in"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100%",
+          minHeight: 400,
+        }}
+      >
+        <div
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: 20,
+            background: token.colorFillTertiary,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: token.marginLG,
+          }}
+        >
+          <ThunderboltOutlined style={{ fontSize: 40, color: token.colorTextTertiary }} />
+        </div>
+        <Title level={4} style={{ color: token.colorTextSecondary, marginBottom: token.marginXS }}>
+          等待 AI 执行操作
+        </Title>
+        <Text type="secondary" style={{ maxWidth: 300, textAlign: "center" }}>
+          与右侧的数据分析助手对话，这里将显示执行的具体内容和结果
+        </Text>
+      </div>
     );
   }
 

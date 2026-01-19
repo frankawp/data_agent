@@ -1,8 +1,132 @@
 @import "tailwindcss";
 
+/* ============================================
+   设计令牌 - CSS 变量
+   ============================================ */
+
 :root {
+  /* 颜色 */
+  --color-primary: #2563eb;
+  --color-primary-hover: #3b82f6;
+  --color-primary-active: #1d4ed8;
+  --color-primary-bg: #eff6ff;
+  --color-primary-bg-hover: #dbeafe;
+  --color-primary-border: #93c5fd;
+
+  --color-success: #52c41a;
+  --color-success-bg: #f6ffed;
+  --color-success-border: #b7eb8f;
+
+  --color-warning: #faad14;
+  --color-warning-bg: #fffbe6;
+  --color-warning-border: #ffe58f;
+
+  --color-error: #ff4d4f;
+  --color-error-bg: #fff2f0;
+  --color-error-border: #ffccc7;
+
+  --color-info: #1890ff;
+  --color-info-bg: #e6f4ff;
+  --color-info-border: #91caff;
+
+  /* 文字颜色 */
+  --color-text: #1f2937;
+  --color-text-secondary: #6b7280;
+  --color-text-tertiary: #9ca3af;
+  --color-text-disabled: #d1d5db;
+
+  /* 边框 */
+  --color-border: #e5e7eb;
+  --color-border-secondary: #f0f0f0;
+
+  /* 背景 */
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #1f2937;
+  --bg-layout: #f5f7fa;
+  --bg-container: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-spotlight: #fafafa;
+
+  /* 填充 */
+  --fill: #f3f4f6;
+  --fill-secondary: #f9fafb;
+  --fill-tertiary: #fafafa;
+
+  /* 间距 */
+  --spacing-xxs: 2px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-xxl: 48px;
+
+  /* 圆角 */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.15);
+  --shadow-primary: 0 2px 8px rgba(37, 99, 235, 0.25);
+
+  /* 过渡 */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+  --transition-slow: 0.35s ease;
+}
+
+/* 深色模式 */
+.dark,
+html.dark {
+  --color-primary: #3b82f6;
+  --color-primary-hover: #60a5fa;
+  --color-primary-active: #2563eb;
+  --color-primary-bg: #172554;
+  --color-primary-bg-hover: #1e3a8a;
+  --color-primary-border: #1d4ed8;
+
+  --color-success-bg: #162312;
+  --color-success-border: #274916;
+
+  --color-warning-bg: #2b2111;
+  --color-warning-border: #594214;
+
+  --color-error-bg: #2c1618;
+  --color-error-border: #58181c;
+
+  --color-info-bg: #111a2c;
+  --color-info-border: #153450;
+
+  --color-text: #f9fafb;
+  --color-text-secondary: #9ca3af;
+  --color-text-tertiary: #6b7280;
+  --color-text-disabled: #4b5563;
+
+  --color-border: #374151;
+  --color-border-secondary: #1f2937;
+
+  --background: #111827;
+  --foreground: #f9fafb;
+  --bg-layout: #0f172a;
+  --bg-container: #1f2937;
+  --bg-elevated: #374151;
+  --bg-spotlight: #1f2937;
+
+  --fill: #374151;
+  --fill-secondary: #1f2937;
+  --fill-tertiary: #111827;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.6);
+  --shadow-primary: 0 2px 8px rgba(59, 130, 246, 0.4);
 }
 
 @theme inline {
@@ -12,15 +136,291 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ============================================
+   全局样式
+   ============================================ */
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  transition: background-color var(--transition-normal),
+    color var(--transition-normal);
+}
+
+/* 选中文字样式 */
+::selection {
+  background: var(--color-primary-bg-hover);
+  color: var(--color-primary);
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* 深色模式滚动条 */
+.dark ::-webkit-scrollbar-thumb {
+  background: var(--fill);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* ============================================
+   动画关键帧
+   ============================================ */
+
+/* 淡入 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 淡入上移 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 淡入下移 */
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 缩放淡入 */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 脉冲 */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* 轻微抖动 */
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-2px);
+  }
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+/* 旋转 */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 弹跳 */
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* 滑入左侧 */
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 滑入右侧 */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ============================================
+   工具类
+   ============================================ */
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-normal) ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp var(--transition-normal) ease-out;
+}
+
+.animate-fade-in-down {
+  animation: fadeInDown var(--transition-normal) ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn var(--transition-normal) ease-out;
+}
+
+.animate-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.animate-bounce {
+  animation: bounce 0.6s ease-in-out infinite;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft var(--transition-normal) ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight var(--transition-normal) ease-out;
+}
+
+/* 悬停效果 */
+.hover-lift {
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* 卡片悬停效果 */
+.card-hover {
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary-border);
+}
+
+/* 渐变背景 */
+.gradient-primary {
+  background: linear-gradient(135deg, var(--color-primary), #4f46e5);
+}
+
+.gradient-success {
+  background: linear-gradient(135deg, var(--color-success), #73d13d);
+}
+
+/* 文字渐变 */
+.text-gradient {
+  background: linear-gradient(135deg, var(--color-primary), #4f46e5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 玻璃态效果 */
+.glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.dark .glass {
+  background: rgba(31, 41, 55, 0.8);
+}
+
+/* 骨架屏闪烁 */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--fill) 25%,
+    var(--fill-secondary) 50%,
+    var(--fill) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
