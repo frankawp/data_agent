@@ -25,6 +25,19 @@ def get_current_session() -> Optional["SessionManager"]:
     return _current_session
 
 
+def set_current_session(session: "SessionManager") -> None:
+    """
+    设置当前会话实例
+
+    用于 API 调用时临时切换会话上下文。
+
+    Args:
+        session: 要设置为当前的会话实例
+    """
+    global _current_session
+    _current_session = session
+
+
 def get_session_by_id(session_id: str) -> Optional["SessionManager"]:
     """
     根据 session_id 获取会话实例
@@ -91,6 +104,9 @@ class SessionManager:
 
         # Python 执行上下文（变量持久化）
         self._execution_context: Dict[str, Any] = {}
+
+        # 数据库连接配置（会话级别）
+        self._db_config: Optional[Dict[str, Any]] = None
 
         # 创建会话目录
         self._create_session_dirs()
@@ -226,6 +242,69 @@ class SessionManager:
     def clear_execution_context(self) -> None:
         """清空 Python 执行上下文"""
         self._execution_context.clear()
+
+    def set_db_config(
+        self,
+        host: str,
+        port: int,
+        user: str,
+        password: str,
+        database: str
+    ) -> None:
+        """
+        设置会话级数据库连接配置
+
+        Args:
+            host: 数据库主机地址
+            port: 数据库端口
+            user: 用户名
+            password: 密码
+            database: 数据库名称
+        """
+        self._db_config = {
+            "host": host,
+            "port": port,
+            "user": user,
+            "password": password,
+            "database": database,
+        }
+        logger.info(f"会话 {self.session_id} 数据库配置已设置: {user}@{host}:{port}/{database}")
+
+    def get_db_config(self) -> Optional[Dict[str, Any]]:
+        """
+        获取数据库配置（不含密码）
+
+        Returns:
+            数据库配置字典（不含密码），未配置返回 None
+        """
+        if not self._db_config:
+            return None
+        return {
+            "host": self._db_config["host"],
+            "port": self._db_config["port"],
+            "user": self._db_config["user"],
+            "database": self._db_config["database"],
+        }
+
+    def get_db_connection_string(self) -> Optional[str]:
+        """
+        获取数据库连接字符串
+
+        Returns:
+            SQLAlchemy 格式的连接字符串，未配置返回 None
+        """
+        if not self._db_config:
+            return None
+        cfg = self._db_config
+        # URL 编码密码中的特殊字符
+        from urllib.parse import quote_plus
+        password = quote_plus(str(cfg["password"]))
+        return f"mysql+pymysql://{cfg['user']}:{password}@{cfg['host']}:{cfg['port']}/{cfg['database']}"
+
+    def clear_db_config(self) -> None:
+        """清除数据库配置"""
+        self._db_config = None
+        logger.info(f"会话 {self.session_id} 数据库配置已清除")
 
     def get_export_path(self, filename: str) -> Path:
         """

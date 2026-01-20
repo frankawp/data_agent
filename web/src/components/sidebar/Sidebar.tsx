@@ -16,6 +16,7 @@ import {
 import type { MenuProps, UploadProps } from "antd";
 import { useWorkspace } from "@/hooks/useWorkspaceContext";
 import { useSession } from "@/providers/SessionProvider";
+import { DatabaseConfig } from "@/components/database/DatabaseConfig";
 
 const { Text, Title } = Typography;
 
@@ -59,29 +60,33 @@ export function Sidebar() {
   const { token } = theme.useToken();
 
   // 加载数据库表
-  const loadTables = () => {
+  const loadTables = useCallback(() => {
     setLoading(true);
-    fetch("/api/database/tables")
+    const url = sessionId
+      ? `/api/database/tables?session_id=${sessionId}`
+      : "/api/database/tables";
+
+    fetch(url)
       .then((r) => r.json())
       .then((data) => {
-        if (data.tables) {
-          const tableList: TableInfo[] = [];
-          if (typeof data.tables === "string") {
-            const lines = data.tables.split("\n");
-            lines.forEach((line: string) => {
-              const trimmed = line.trim();
-              if (trimmed && trimmed.startsWith("- ")) {
-                const name = trimmed.slice(2);
-                tableList.push({ name, type: "table" });
-              }
-            });
-          }
-          setTables(tableList);
+        const tableList: TableInfo[] = [];
+        if (data.tables && typeof data.tables === "string") {
+          const lines = data.tables.split("\n");
+          lines.forEach((line: string) => {
+            const trimmed = line.trim();
+            if (trimmed && trimmed.startsWith("- ")) {
+              const name = trimmed.slice(2);
+              tableList.push({ name, type: "table" });
+            }
+          });
         }
+        setTables(tableList);
       })
-      .catch(() => {})
+      .catch(() => {
+        setTables([]);
+      })
       .finally(() => setLoading(false));
-  };
+  }, [sessionId]);
 
   // 加载导入文件列表
   const loadImportFiles = useCallback(async () => {
@@ -105,7 +110,7 @@ export function Sidebar() {
   useEffect(() => {
     loadTables();
     loadImportFiles();
-  }, [loadImportFiles]);
+  }, [loadTables, loadImportFiles]);
 
   const handleTableClick = (tableName: string) => {
     setSecondaryContent({
@@ -446,6 +451,11 @@ export function Sidebar() {
         style={{ flex: 1, overflow: "auto", padding: `${token.paddingSM}px 0` }}
         className="sidebar-menu-container"
       >
+        {/* 数据库连接配置 */}
+        <div style={{ padding: `0 ${token.paddingSM}px`, marginBottom: token.marginXS }}>
+          <DatabaseConfig onConfigured={loadTables} />
+        </div>
+
         <style>{`
           .sidebar-menu-container .ant-menu-item {
             height: auto !important;

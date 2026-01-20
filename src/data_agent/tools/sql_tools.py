@@ -22,6 +22,30 @@ from ..session import get_current_session
 logger = logging.getLogger(__name__)
 
 
+def _get_db_connection() -> str:
+    """
+    获取数据库连接字符串
+
+    只使用当前会话的数据库配置，不回退到全局配置。
+    每个会话必须独立配置数据库连接。
+
+    Returns:
+        数据库连接字符串
+
+    Raises:
+        ValueError: 未配置数据库连接
+    """
+    # 只使用会话级配置
+    session = get_current_session()
+    if session:
+        conn_str = session.get_db_connection_string()
+        if conn_str:
+            logger.debug(f"使用会话 {session.session_id} 的数据库配置")
+            return conn_str
+
+    raise ValueError("未配置数据库连接。请先在左侧「数据源」面板中配置数据库连接信息。")
+
+
 def _get_export_dir() -> Path:
     """获取导出目录，优先使用当前会话目录"""
     session = get_current_session()
@@ -89,7 +113,8 @@ def execute_sql(query: str, database: str = "default") -> str:
                 return f"错误：不允许执行 {keyword} 操作（此操作在任何模式下都被禁止）"
 
     try:
-        engine = create_engine(settings.db_connection)
+        db_connection = _get_db_connection()
+        engine = create_engine(db_connection)
         with engine.connect() as conn:
             result = conn.execute(text(query))
             df = pd.DataFrame(result.fetchall(), columns=result.keys())
@@ -138,11 +163,11 @@ def describe_table(table_name: str) -> str:
     Returns:
         表结构描述
     """
-    settings = get_settings()
-
     try:
-        engine = create_engine(settings.db_connection)
-        db_type = settings.get_db_type()
+        db_connection = _get_db_connection()
+        engine = create_engine(db_connection)
+        # 从连接字符串推断数据库类型
+        db_type = "mysql" if "mysql" in db_connection else "postgresql" if "postgresql" in db_connection else "unknown"
 
         if db_type == "mysql":
             query = f"DESCRIBE {table_name}"
@@ -173,11 +198,11 @@ def list_tables() -> str:
     Returns:
         表名列表
     """
-    settings = get_settings()
-
     try:
-        engine = create_engine(settings.db_connection)
-        db_type = settings.get_db_type()
+        db_connection = _get_db_connection()
+        engine = create_engine(db_connection)
+        # 从连接字符串推断数据库类型
+        db_type = "mysql" if "mysql" in db_connection else "postgresql" if "postgresql" in db_connection else "unknown"
 
         if db_type == "mysql":
             query = "SHOW TABLES"

@@ -13,7 +13,7 @@ from rich.console import Console
 
 from ..config.settings import get_settings
 from ..config.modes import get_mode_manager
-from ..session import SessionManager
+from ..session import SessionManager, get_session_by_id, set_current_session
 from .plan_executor import PlanExecutor, StepStatus
 from .llm import create_llm
 from .compactor import ConversationCompactor
@@ -45,8 +45,16 @@ class DataAgent:
             console: Rich Console 实例，用于 Plan Mode 交互
             session_id: 会话 ID，不提供则自动生成
         """
-        # 创建会话管理器（会话隔离的关键）
-        self._session = SessionManager(session_id=session_id)
+        # 获取或创建会话管理器（会话隔离的关键）
+        # 优先复用现有会话，保留已配置的数据库连接等状态
+        existing_session = get_session_by_id(session_id) if session_id else None
+        if existing_session:
+            self._session = existing_session
+        else:
+            self._session = SessionManager(session_id=session_id)
+
+        # 设置为当前会话，确保工具能访问会话配置
+        set_current_session(self._session)
 
         # 创建回调持有者，支持动态更新回调
         self._subagent_callback_holder = SubAgentCallbackHolder()
