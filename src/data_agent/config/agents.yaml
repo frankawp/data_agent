@@ -33,7 +33,7 @@ tools:
     python_tools: true
     ml_tools: true
     graph_tools: false  # 禁用图分析工具（使用 execute_python_safe + networkx 替代）
-    dagster_tools: true  # 数据处理管道工具
+    dagster_tools: false  # 暂时禁用，后续重新设计
 
   # 工具别名（可选）
   aliases:
@@ -54,11 +54,13 @@ subagents:
       数据采集代理。从数据库或 /imports/ 获取数据，导出到 /exports/。
       工作前先 ls /imports/ 和 /exports/ 查看文件。
       使用内置 read_file/write_file 操作文件。
+      可使用 Python 读取 Excel/CSV 等二进制文件。
     llm: fast
     tools:
       - list_tables
       - describe_table
       - execute_sql
+      - execute_python_safe
     prompt_file: prompts/data_collector.md
 
   # 数据分析子代理
@@ -85,19 +87,6 @@ subagents:
       - execute_python_safe
     prompt_file: prompts/report_writer.md
 
-  # 数据处理子代理
-  data-processor:
-    description: |
-      数据处理代理。从 /imports/ 或 /exports/ 读取数据进行处理。
-      工作前先 ls /imports/ 和 /exports/ 查看文件。
-      使用 Dagster 工具构建处理管道，结果保存到 /exports/。
-    llm: powerful
-    tools:
-      - list_preset_ops
-      - generate_dag_code
-      - execute_dag_job
-      - list_dag_jobs
-    prompt_file: prompts/data_processor.md
 
 # ==================== 协调者配置 ====================
 coordinator:

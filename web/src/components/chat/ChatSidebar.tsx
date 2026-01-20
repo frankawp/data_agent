@@ -215,10 +215,18 @@ export function ChatSidebar() {
     setWsState("connecting");
 
     // 连接到后端 WebSocket
-    // 根据当前页面协议选择 ws 或 wss
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    // 后端运行在 8000 端口
-    const wsUrl = `${protocol}//localhost:8000/api/ws/chat?session_id=${sessionId}`;
+    // 优先使用环境变量配置的 WebSocket URL
+    const wsBaseUrl = process.env.NEXT_PUBLIC_WS_URL;
+    let wsUrl: string;
+
+    if (wsBaseUrl) {
+      // 使用环境变量配置的 URL
+      wsUrl = `${wsBaseUrl}/api/ws/chat?session_id=${sessionId}`;
+    } else {
+      // 本地开发：根据当前页面协议选择 ws 或 wss
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      wsUrl = `${protocol}//localhost:8000/api/ws/chat?session_id=${sessionId}`;
+    }
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;

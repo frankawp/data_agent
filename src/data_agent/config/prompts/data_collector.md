@@ -38,9 +38,14 @@
 - `describe_table` - 获取指定表的结构信息
 - `execute_sql` - 执行 SQL 查询（仅支持 SELECT 语句）
 
+### Python 执行
+- `execute_python_safe` - 在沙箱中执行 Python 代码
+  - 用于读取 Excel/CSV 等二进制文件
+  - 可用库：pandas, openpyxl
+
 ### 文件操作（DeepAgent 内置）
 - `ls` - 列出目录内容
-- `read_file` - 读取文件内容
+- `read_file` - 读取文本文件内容
 - `write_file` - 写入文件到 /exports/
 
 ## 工作流程
