@@ -75,6 +75,280 @@ print(df.head())
 print(df.info())
 ```
 
+## 分析类型感知
+
+当任务中包含【分析类型】标记时，按类型进行针对性数据准备：
+
+### 收到【AB测试分析】时
+
+这是针对**样本量不平衡**的营销活动AB测试场景，需要计算拉平倍率。
+
+**业务场景特点**：
+- 实验组和对照组的营销人数差异很大
+- 可能有多个实验策略（如6折满额券、15天满额券）
+- 需要按时间维度观察效果趋势
+
+**第一步：识别原始数据结构**
+
+**必需字段**：
+- 日期字段（如 日期, date）
+- 分组字段（如 活动分组ID, group_id）
+- 分组名称（如 活动分组名称, group_name）
+- 样本量字段（如 营销人数, user_count）
+- 效果指标字段：
+  - 金额类：余额、收益、GMV 等
+  - 人数类：来访人数、转化人数、借款人数等
+
+**识别对照组**：通常名称包含"对照"、"control"、"baseline"
+
+**第二步：计算拉平倍率**
+
+```python
+import pandas as pd
+
+df = pd.read_excel(IMPORT_DIR / "abtest_data.xlsx")
+
+# 识别对照组（根据实际列名和值调整）
+control_mask = df['活动分组名称'].str.contains('对照')
+control_users = df[control_mask]['营销人数'].iloc[0]
+
+# 计算各分组的拉平倍率
+ratios = df.groupby(['活动分组ID', '活动分组名称']).agg({
+    '营销人数': 'first'
+}).reset_index()
+
+ratios['拉平倍率'] = ratios['营销人数'] / control_users
+
+print("=== 拉平倍率 ===")
+print(ratios)
+
+# 保存倍率表
+ratios.to_csv(EXPORT_DIR / "xxx_abtest_ratios.csv", index=False)
+```
+
+**第三步：准备按日期分组的汇总数据**
+
+```python
+# 按日期和分组汇总（如果原始数据不是按日汇总的）
+daily_df = df.groupby(['日期', '活动分组ID', '活动分组名称']).agg({
+    '营销人数': 'first',
+    '余额': 'sum',       # 根据实际列名调整
+    '收益': 'sum',
+    '个人中心来访人数': 'sum',
+    '借款页面来访人数': 'sum',
+    '借款人数': 'sum'
+}).reset_index()
+
+# 数据检查
+print(f"日期范围: {daily_df['日期'].min()} ~ {daily_df['日期'].max()}")
+print(f"分组数: {daily_df['活动分组ID'].nunique()}")
+print(f"总行数: {len(daily_df)}")
+
+# 保存日汇总数据
+daily_df.to_csv(EXPORT_DIR / "xxx_abtest_daily.csv", index=False)
+```
+
+**输出文件清单**：
+1. `{来源}_abtest_ratios.csv` - 拉平倍率表（group_id, group_name, 营销人数, 拉平倍率）
+2. `{来源}_abtest_daily.csv` - 按日期×分组的汇总数据
+
+### 收到【相关性分析】时
+
+用于分析变量之间的关联程度，找出强相关的变量对。
+
+**业务场景特点**：
+- 探索多个变量之间的线性关系
+- 为后续建模筛选特征
+- 发现潜在的因果线索
+
+**第一步：识别原始数据结构**
+
+**必需字段**：
+- 多个数值型变量（待分析的指标/特征）
+- 可选：分类字段（如需分组分析）
+
+**第二步：数据清洗**
+
+```python
+import pandas as pd
+import numpy as np
+
+df = pd.read_excel(IMPORT_DIR / "data.xlsx")
+
+# 只保留数值列
+numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+print(f"数值列: {numeric_cols}")
+
+# 检查缺失值
+missing = df[numeric_cols].isnull().sum()
+print(f"\n缺失值统计:\n{missing[missing > 0]}")
+
+# 处理缺失值：删除含缺失值的行
+df_clean = df[numeric_cols].dropna()
+print(f"\n原始行数: {len(df)}, 清洗后: {len(df_clean)}")
+
+# 检查异常值（可选：标记超出3倍标准差的值）
+for col in numeric_cols:
+    mean, std = df_clean[col].mean(), df_clean[col].std()
+    outliers = ((df_clean[col] - mean).abs() > 3 * std).sum()
+    if outliers > 0:
+        print(f"{col}: 有 {outliers} 个异常值")
+```
+
+**第三步：保存清洗后的数据**
+
+```python
+# 保存用于相关性分析的数据
+df_clean.to_csv(EXPORT_DIR / "xxx_correlation_prepared.csv", index=False)
+
+print(f"\n=== 数据准备完成 ===")
+print(f"变量数: {len(numeric_cols)}")
+print(f"样本量: {len(df_clean)}")
+```
+
+**输出文件清单**：
+1. `{来源}_correlation_prepared.csv` - 清洗后的数值数据
+
+### 收到【归因分析】时
+
+用于分析各因素对目标指标的贡献度，找出关键驱动因素。
+
+**业务场景特点**：
+- 有一个明确的目标变量（如销售额、转化率）
+- 有多个潜在的影响因素（特征变量）
+- 需要量化各因素的贡献
+
+**第一步：识别原始数据结构**
+
+**必需字段**：
+- 目标变量（Y）：要解释的结果指标
+- 特征变量（X1, X2, ...）：潜在影响因素
+- 可含分类变量（会在分析时做编码）
+
+**第二步：明确目标变量和特征变量**
+
+```python
+import pandas as pd
+import numpy as np
+
+df = pd.read_excel(IMPORT_DIR / "data.xlsx")
+
+# 查看所有列
+print("所有列:")
+print(df.dtypes)
+
+# 确定目标变量（根据业务需求指定）
+target_col = 'sales'  # 修改为实际的目标列名
+
+# 特征变量：除目标变量外的所有列
+feature_cols = [c for c in df.columns if c != target_col]
+
+print(f"\n目标变量: {target_col}")
+print(f"特征变量: {feature_cols}")
+
+# 区分数值型和分类型特征
+numeric_features = df[feature_cols].select_dtypes(include=[np.number]).columns.tolist()
+categorical_features = df[feature_cols].select_dtypes(include=['object']).columns.tolist()
+
+print(f"\n数值特征: {numeric_features}")
+print(f"分类特征: {categorical_features}")
+```
+
+**第三步：数据清洗和标注**
+
+```python
+# 处理缺失值
+df_clean = df.dropna()
+print(f"原始行数: {len(df)}, 清洗后: {len(df_clean)}")
+
+# 检查目标变量分布
+print(f"\n目标变量统计:")
+print(df_clean[target_col].describe())
+
+# 标注变量类型并保存
+df_clean.to_csv(EXPORT_DIR / "xxx_attribution_prepared.csv", index=False)
+
+# 保存元数据
+meta = {
+    'target': target_col,
+    'numeric_features': numeric_features,
+    'categorical_features': categorical_features
+}
+print(f"\n=== 元数据 ===")
+print(meta)
+```
+
+**输出文件清单**：
+1. `{来源}_attribution_prepared.csv` - 清洗后的数据
+2. 返回元数据：目标变量名、数值特征列表、分类特征列表
+
+### 收到【聚类分析】时
+
+用于发现数据中的自然分组，进行用户/实体分群。
+
+**业务场景特点**：
+- 需要对用户、商品等进行分群
+- 没有预定义的标签（无监督学习）
+- 希望发现数据中的自然聚类
+
+**第一步：识别原始数据结构**
+
+**必需字段**：
+- 实体ID（如 user_id, product_id）
+- 聚类特征（数值型为主）
+
+**第二步：特征选择和缺失值处理**
+
+```python
+import pandas as pd
+import numpy as np
+
+df = pd.read_excel(IMPORT_DIR / "users.xlsx")
+
+# 确定ID列和特征列
+id_col = 'user_id'  # 修改为实际的ID列名
+feature_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+if id_col in feature_cols:
+    feature_cols.remove(id_col)
+
+print(f"ID列: {id_col}")
+print(f"特征列: {feature_cols}")
+print(f"样本量: {len(df)}")
+
+# 处理缺失值
+df_clean = df.dropna(subset=feature_cols)
+print(f"缺失值处理后: {len(df_clean)}")
+```
+
+**第三步：特征标准化**
+
+聚类分析对特征尺度敏感，必须标准化。
+
+```python
+# 标准化（z-score）
+df_features = df_clean[feature_cols]
+df_standardized = (df_features - df_features.mean()) / df_features.std()
+
+# 移除异常值（z-score绝对值 > 3）
+mask = (np.abs(df_standardized) <= 3).all(axis=1)
+df_final = df_clean[mask].copy()
+df_final[feature_cols] = df_standardized[mask]
+
+print(f"异常值处理后: {len(df_final)} (移除 {len(df_clean) - len(df_final)} 个)")
+
+# 保存
+output_cols = [id_col] + feature_cols
+df_final[output_cols].to_csv(EXPORT_DIR / "xxx_clustering_prepared.csv", index=False)
+
+print(f"\n=== 数据准备完成 ===")
+print(f"ID列: {id_col}")
+print(f"特征数: {len(feature_cols)}")
+print(f"样本量: {len(df_final)}")
+```
+
+**输出文件清单**：
+1. `{来源}_clustering_prepared.csv` - ID + 标准化后的特征
+
 ## 输出格式
 
 返回简洁的结果摘要，包括：
