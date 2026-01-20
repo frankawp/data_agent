@@ -62,8 +62,18 @@
 
 1. `ls /imports/` 查看上传的文件
 2. `ls /exports/` 查看已有结果
-3. 使用 `read_file` 读取 /imports/ 中的文件
+3. 根据文件类型选择读取方式：
+   - **文本文件 (CSV, TXT)**：使用 `read_file`
+   - **二进制文件 (Excel .xlsx/.xls)**：使用 `execute_python_safe` + pandas
 4. 如需简单转换，使用 `write_file` 保存到 /exports/
+
+**读取 Excel 文件示例**：
+```python
+import pandas as pd
+df = pd.read_excel(IMPORT_DIR / "data.xlsx")
+print(df.head())
+print(df.info())
+```
 
 ## 输出格式
 
