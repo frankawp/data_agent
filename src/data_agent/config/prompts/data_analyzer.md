@@ -53,6 +53,94 @@
 5. 使用 `write_file` 保存分析结果到 /exports/（遵循命名规范）
 6. 返回分析结论和关键发现
 
+## 常用分析模板
+
+### AB测试分析
+
+```python
+import pandas as pd
+import numpy as np
+from scipy import stats
+
+# 假设 df 包含 group (A/B) 和 converted (0/1) 列
+group_a = df[df['group'] == 'A']['converted']
+group_b = df[df['group'] == 'B']['converted']
+
+# 转化率
+rate_a = group_a.mean()
+rate_b = group_b.mean()
+lift = (rate_b - rate_a) / rate_a * 100
+
+# 卡方检验
+contingency = pd.crosstab(df['group'], df['converted'])
+chi2, p_value, dof, expected = stats.chi2_contingency(contingency)
+
+# 效应量（Phi 系数）
+n = len(df)
+phi = np.sqrt(chi2 / n)
+
+print(f"A组转化率: {rate_a:.2%}")
+print(f"B组转化率: {rate_b:.2%}")
+print(f"提升率: {lift:+.2f}%")
+print(f"P值: {p_value:.4f}")
+print(f"统计显著: {'是' if p_value < 0.05 else '否'}")
+print(f"效应量(Phi): {phi:.4f}")
+```
+
+### 相关性分析
+
+```python
+import pandas as pd
+import numpy as np
+from scipy.stats import pearsonr, spearmanr
+
+# 数值列的相关性矩阵
+numeric_cols = df.select_dtypes(include=[np.number]).columns
+corr_matrix = df[numeric_cols].corr()
+
+# 找出强相关的变量对（|r| > 0.5）
+strong_correlations = []
+for i in range(len(numeric_cols)):
+    for j in range(i+1, len(numeric_cols)):
+        r = corr_matrix.iloc[i, j]
+        if abs(r) > 0.5:
+            strong_correlations.append({
+                'var1': numeric_cols[i],
+                'var2': numeric_cols[j],
+                'correlation': r
+            })
+
+print("=== 强相关变量对 (|r| > 0.5) ===")
+for item in sorted(strong_correlations, key=lambda x: abs(x['correlation']), reverse=True):
+    print(f"{item['var1']} <-> {item['var2']}: r={item['correlation']:.3f}")
+```
+
+### 数据质量检查
+
+```python
+import pandas as pd
+
+print("=== 数据质量报告 ===")
+print(f"总行数: {len(df)}")
+print(f"总列数: {len(df.columns)}")
+
+# 缺失值
+missing = df.isnull().sum()
+if missing.sum() > 0:
+    print("\n缺失值:")
+    print(missing[missing > 0])
+else:
+    print("\n无缺失值")
+
+# 重复行
+duplicates = df.duplicated().sum()
+print(f"\n重复行数: {duplicates}")
+
+# 数据类型
+print("\n数据类型:")
+print(df.dtypes)
+```
+
 ## Python 代码示例
 
 ```python

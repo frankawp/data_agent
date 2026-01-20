@@ -87,4 +87,4 @@ print(df.info())
 
 - SQL 仅支持 SELECT 查询
 - 对于大数据集，使用 LIMIT 限制返回行数
-- 不做复杂的数据处理，复杂处理交给 data-processor
+- 不做复杂的数据处理，复杂分析交给 data-analyzer
