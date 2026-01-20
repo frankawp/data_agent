@@ -72,13 +72,17 @@ class DataAgentSandbox:
         self._sandbox = None
         self._session = session
 
-        # 设置导出目录（用于 volume 挂载）
+        # 设置目录（用于 volume 挂载）
         if session:
+            self.import_dir = session.import_dir
             self.export_dir = session.export_dir
             self.workspace_dir = session.workspace_dir
         else:
-            self.export_dir = Path.home() / ".data_agent" / "exports"
-            self.workspace_dir = Path.home() / ".data_agent" / "workspace"
+            base_dir = Path.home() / ".data_agent"
+            self.import_dir = base_dir / "imports"
+            self.export_dir = base_dir / "exports"
+            self.workspace_dir = base_dir / "workspace"
+            self.import_dir.mkdir(parents=True, exist_ok=True)
             self.export_dir.mkdir(parents=True, exist_ok=True)
             self.workspace_dir.mkdir(parents=True, exist_ok=True)
 
@@ -209,12 +213,14 @@ class DataAgentSandbox:
             "__name__": "__main__",
         }
 
-        # 注入导出目录变量，让代码知道文件应该保存到哪里
-        restricted_globals["EXPORT_DIR"] = str(self.export_dir)
+        # 注入目录变量，让代码知道文件位置
+        restricted_globals["IMPORT_DIR"] = Path(self.import_dir)
+        restricted_globals["EXPORT_DIR"] = Path(self.export_dir)
 
-        # 预加载 os 模块（用于路径操作）
+        # 预加载 os 和 pathlib 模块（用于路径操作）
         import os
         restricted_globals["os"] = os
+        restricted_globals["Path"] = Path
 
         # 从会话中注入已保存的变量（变量持久化）
         if self._session:
@@ -310,8 +316,9 @@ class DataAgentSandbox:
             "__loader__", "__spec__", "__annotations__", "__cached__",
             # 预加载模块
             "pd", "pandas", "np", "numpy", "os", "scipy", "stats", "sklearn",
+            "matplotlib", "plt", "sns", "seaborn",
             # 注入变量
-            "EXPORT_DIR",
+            "IMPORT_DIR", "EXPORT_DIR", "Path",
         }
 
         # 允许保存的类型
