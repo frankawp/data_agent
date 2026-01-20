@@ -75,10 +75,6 @@ export function DatabaseConfig({ onConfigured, defaultExpanded = false }: Databa
         } else {
           setConfigured(false);
           setCurrentConfig(null);
-          // 如果未配置，默认展开
-          if (!defaultExpanded) {
-            setExpanded(true);
-          }
         }
       })
       .catch(() => {
