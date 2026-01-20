@@ -14,6 +14,27 @@
 - 使用 `write_file` 写入 /exports/ 目录
 - **不要写入 /imports/**（只读目录）
 
+## ⚠️ 路径映射（重要）
+
+`ls` 命令显示的是虚拟路径，**在 Python 代码中必须使用预定义变量**：
+
+| ls 显示路径 | Python 代码中使用 |
+|------------|------------------|
+| `/imports/xxx.xlsx` | `IMPORT_DIR / "xxx.xlsx"` |
+| `/exports/xxx.csv` | `EXPORT_DIR / "xxx.csv"` |
+
+**错误示例**（不要这样写）：
+```python
+df = pd.read_csv("/exports/data.csv")  # ❌ 错误！
+plt.savefig("/exports/chart.png")  # ❌ 错误！
+```
+
+**正确示例**：
+```python
+df = pd.read_csv(EXPORT_DIR / "data.csv")  # ✅ 正确
+plt.savefig(EXPORT_DIR / "chart.png")  # ✅ 正确
+```
+
 ## exports 文件命名规范
 
 格式：`{来源}_{处理类型}_{描述}.{ext}`
@@ -52,11 +73,13 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-import os
 
 # 设置中文字体支持
 plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
+
+# 读取数据（使用 EXPORT_DIR 预定义变量）
+df = pd.read_csv(EXPORT_DIR / "xxx_analysis_result.csv")
 
 # 创建图表
 fig, ax = plt.subplots(figsize=(10, 6))
@@ -66,9 +89,9 @@ ax.set_title('图表标题', fontsize=14)
 ax.set_xlabel('X轴标签')
 ax.set_ylabel('Y轴标签')
 
-# 保存图表（使用 EXPORT_DIR）
+# 保存图表（使用 EXPORT_DIR / 文件名）
 plt.tight_layout()
-chart_path = os.path.join(EXPORT_DIR, '{来源}_chart_{描述}.png')
+chart_path = EXPORT_DIR / '{来源}_chart_{描述}.png'
 plt.savefig(chart_path, dpi=150, bbox_inches='tight')
 print(f"图表已保存: {chart_path}")
 plt.close()

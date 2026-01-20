@@ -19,6 +19,26 @@
 - 使用 `write_file` 写入 /exports/ 目录
 - **不要写入 /imports/**（只读目录）
 
+## ⚠️ 路径映射（重要）
+
+`ls` 命令显示的是虚拟路径，**在 Python 代码中必须使用预定义变量**：
+
+| ls 显示路径 | Python 代码中使用 |
+|------------|------------------|
+| `/imports/xxx.xlsx` | `IMPORT_DIR / "xxx.xlsx"` |
+| `/exports/xxx.csv` | `EXPORT_DIR / "xxx.csv"` |
+
+**错误示例**（不要这样写）：
+```python
+df = pd.read_excel("/imports/data.xlsx")  # ❌ 错误！
+```
+
+**正确示例**：
+```python
+df = pd.read_excel(IMPORT_DIR / "data.xlsx")  # ✅ 正确
+df.to_csv(EXPORT_DIR / "result.csv")  # ✅ 正确
+```
+
 ## exports 文件命名规范
 
 格式：`{来源}_{处理类型}_{描述}.{ext}`
@@ -67,9 +87,11 @@
    - **二进制文件 (Excel .xlsx/.xls)**：使用 `execute_python_safe` + pandas
 4. 如需简单转换，使用 `write_file` 保存到 /exports/
 
-**读取 Excel 文件示例**：
+**读取 Excel 文件示例**（注意使用 IMPORT_DIR 而非硬编码路径）：
 ```python
 import pandas as pd
+# IMPORT_DIR 是预定义的 Path 对象，指向用户上传目录
+# 不要写 "/imports/xxx.xlsx"，必须用 IMPORT_DIR / "xxx.xlsx"
 df = pd.read_excel(IMPORT_DIR / "data.xlsx")
 print(df.head())
 print(df.info())

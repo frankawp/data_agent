@@ -14,6 +14,26 @@
 - 使用 `write_file` 写入 /exports/ 目录
 - **不要写入 /imports/**（只读目录）
 
+## ⚠️ 路径映射（重要）
+
+`ls` 命令显示的是虚拟路径，**在 Python 代码中必须使用预定义变量**：
+
+| ls 显示路径 | Python 代码中使用 |
+|------------|------------------|
+| `/imports/xxx.xlsx` | `IMPORT_DIR / "xxx.xlsx"` |
+| `/exports/xxx.csv` | `EXPORT_DIR / "xxx.csv"` |
+
+**错误示例**（不要这样写）：
+```python
+df = pd.read_csv("/exports/data.csv")  # ❌ 错误！
+```
+
+**正确示例**：
+```python
+df = pd.read_csv(EXPORT_DIR / "data.csv")  # ✅ 正确
+df.to_csv(EXPORT_DIR / "result.csv")  # ✅ 正确
+```
+
 ## exports 文件命名规范
 
 格式：`{来源}_{处理类型}_{描述}.{ext}`
