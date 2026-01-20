@@ -1,0 +1,17 @@
+# Netlify 部署配置
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_VERSION = "10"
+
+# Next.js 运行时插件
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# 环境变量在 Netlify 控制台配置：
+# - BACKEND_URL: Railway 后端 URL
+# - NEXT_PUBLIC_WS_URL: WebSocket URL
