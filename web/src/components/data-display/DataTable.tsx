@@ -1,8 +1,9 @@
 "use client";
 
-import { Table, Empty, Typography, theme, Tag } from "antd";
+import { useState } from "react";
+import { Table, Empty, Typography, theme, Tag, Button, Tooltip, Modal } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { TableOutlined } from "@ant-design/icons";
+import { TableOutlined, ExpandAltOutlined } from "@ant-design/icons";
 
 const { Text } = Typography;
 
@@ -15,9 +16,14 @@ interface DataTableProps {
   maxRows?: number;
   /** 紧凑模式，用于子代理步骤展示 */
   compact?: boolean;
+  /** 是否显示放大按钮 */
+  expandable?: boolean;
+  /** Modal 标题 */
+  title?: string;
 }
 
-export function DataTable({ data, maxRows, compact }: DataTableProps) {
+export function DataTable({ data, maxRows, compact, expandable = true, title = "数据表" }: DataTableProps) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const { token } = theme.useToken();
   const { columns: columnNames, rows } = data;
 
@@ -80,6 +86,19 @@ export function DataTable({ data, maxRows, compact }: DataTableProps) {
           <Tag icon={<TableOutlined />} color="blue">
             {rows.length} 行 x {columnNames.length} 列
           </Tag>
+          {expandable && (
+            <Tooltip title="放大查看">
+              <Button
+                type="text"
+                size="small"
+                icon={<ExpandAltOutlined />}
+                onClick={() => setIsModalOpen(true)}
+                style={{ opacity: 0.6 }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
+              />
+            </Tooltip>
+          )}
         </div>
       )}
 
@@ -130,6 +149,54 @@ export function DataTable({ data, maxRows, compact }: DataTableProps) {
           background-color: ${token.colorFillSecondary} !important;
         }
       `}</style>
+
+      {/* 放大查看 Modal */}
+      <Modal
+        title={title}
+        open={isModalOpen}
+        onCancel={() => setIsModalOpen(false)}
+        footer={null}
+        width="95vw"
+        style={{ top: 20 }}
+        styles={{
+          body: {
+            maxHeight: "85vh",
+            overflow: "auto",
+            padding: 16,
+          },
+        }}
+      >
+        <div style={{ marginBottom: 12 }}>
+          <Tag icon={<TableOutlined />} color="blue">
+            {rows.length} 行 x {columnNames.length} 列
+          </Tag>
+        </div>
+        <Table
+          columns={columns}
+          dataSource={rows.map((row, rowIndex) => {
+            const record: Record<string, string> = { key: `modal_row_${rowIndex}` };
+            row.forEach((cell, colIndex) => {
+              record[`col_${colIndex}`] = cell;
+            });
+            return record;
+          })}
+          size="small"
+          scroll={{ x: "max-content", y: "calc(85vh - 150px)" }}
+          pagination={{
+            size: "small",
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 行`,
+            pageSizeOptions: ["20", "50", "100", "500"],
+            defaultPageSize: 100,
+          }}
+          bordered
+          style={{
+            borderRadius: token.borderRadius,
+            overflow: "hidden",
+          }}
+          rowClassName={(_, index) => (index % 2 === 0 ? "" : "table-row-striped")}
+        />
+      </Modal>
     </div>
   );
 }

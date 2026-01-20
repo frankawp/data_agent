@@ -19,6 +19,8 @@ import {
   Alert,
   List,
   theme,
+  Modal,
+  Tooltip,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -34,6 +36,7 @@ import {
   OrderedListOutlined,
   ClockCircleOutlined,
   ThunderboltOutlined,
+  ExpandAltOutlined,
 } from "@ant-design/icons";
 import { useWorkspace, StreamingStep, SubagentStep } from "@/hooks/useWorkspaceContext";
 import ReactMarkdown from "react-markdown";
@@ -203,6 +206,227 @@ const toolInfo: Record<string, { name: string; icon: React.ReactNode; color: str
 
 function getToolInfo(toolName: string) {
   return toolInfo[toolName] || { name: toolName, icon: <CodeOutlined />, color: "default" };
+}
+
+/**
+ * 可展开的代码/结果显示组件
+ */
+function ExpandablePreview({
+  content,
+  label,
+  maxHeight = 150,
+  darkTheme = false,
+  modalTitle,
+}: {
+  content: string;
+  label: string;
+  maxHeight?: number;
+  darkTheme?: boolean;
+  modalTitle?: string;
+}) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const preStyle: React.CSSProperties = darkTheme
+    ? {
+        margin: 0,
+        padding: 8,
+        background: "#1a1a2e",
+        color: "#a6e22e",
+        borderRadius: 4,
+        fontSize: 11,
+        fontFamily: "monospace",
+        overflow: "auto",
+        maxHeight,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-all",
+      }
+    : {
+        margin: 0,
+        padding: 8,
+        background: "#f5f5f5",
+        borderRadius: 4,
+        fontSize: 11,
+        fontFamily: "monospace",
+        overflow: "auto",
+        maxHeight,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-all",
+      };
+
+  const modalPreStyle: React.CSSProperties = {
+    margin: 0,
+    padding: 16,
+    background: "#1e1e1e",
+    color: "#d4d4d4",
+    borderRadius: 4,
+    fontSize: 13,
+    lineHeight: 1.6,
+    fontFamily: "monospace",
+    overflow: "auto",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <Text type="secondary" style={{ fontSize: 11 }}>
+          {label}
+        </Text>
+        <Tooltip title="放大查看">
+          <Button
+            type="text"
+            size="small"
+            icon={<ExpandAltOutlined />}
+            onClick={() => setIsModalOpen(true)}
+            style={{ opacity: 0.6, height: 20, width: 20, minWidth: 20 }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
+          />
+        </Tooltip>
+      </div>
+      <pre style={preStyle}>{content || "无内容"}</pre>
+      <Modal
+        title={modalTitle || label}
+        open={isModalOpen}
+        onCancel={() => setIsModalOpen(false)}
+        footer={null}
+        width="90vw"
+        style={{ top: 20 }}
+        styles={{
+          body: {
+            maxHeight: "80vh",
+            overflow: "auto",
+            padding: 0,
+          },
+        }}
+      >
+        <pre style={modalPreStyle}>{content || "无内容"}</pre>
+      </Modal>
+    </div>
+  );
+}
+
+/**
+ * 可展开的 Markdown 内容组件
+ */
+function ExpandableMarkdown({
+  content,
+  maxHeight = 400,
+  modalTitle = "详细内容",
+}: {
+  content: string;
+  maxHeight?: number;
+  modalTitle?: string;
+}) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <Tooltip title="放大查看">
+        <Button
+          type="text"
+          size="small"
+          icon={<ExpandAltOutlined />}
+          onClick={() => setIsModalOpen(true)}
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            opacity: 0.6,
+            zIndex: 10,
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
+        />
+      </Tooltip>
+      <div style={{ background: "#fafafa", padding: 12, borderRadius: 4, maxHeight, overflow: "auto" }}>
+        <SimpleMarkdown text={content} />
+      </div>
+      <Modal
+        title={modalTitle}
+        open={isModalOpen}
+        onCancel={() => setIsModalOpen(false)}
+        footer={null}
+        width="90vw"
+        style={{ top: 20 }}
+        styles={{
+          body: {
+            maxHeight: "80vh",
+            overflow: "auto",
+            padding: 16,
+          },
+        }}
+      >
+        <SimpleMarkdown text={content} />
+      </Modal>
+    </div>
+  );
+}
+
+/**
+ * 可展开的文件内容组件
+ */
+function ExpandableFileContent({
+  filePath,
+  filename,
+  content,
+}: {
+  filePath: string;
+  filename: string;
+  content: string;
+}) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        {filePath && (
+          <Tag color="blue">
+            📄 {filePath}
+          </Tag>
+        )}
+        <Tooltip title="放大查看">
+          <Button
+            type="text"
+            size="small"
+            icon={<ExpandAltOutlined />}
+            onClick={() => setIsModalOpen(true)}
+            style={{ opacity: 0.6 }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
+          />
+        </Tooltip>
+      </div>
+      <FileContentRenderer
+        filename={filename}
+        content={content}
+        compact
+        maxHeight={150}
+      />
+      <Modal
+        title={`文件内容 - ${filename}`}
+        open={isModalOpen}
+        onCancel={() => setIsModalOpen(false)}
+        footer={null}
+        width="90vw"
+        style={{ top: 20 }}
+        styles={{
+          body: {
+            maxHeight: "80vh",
+            overflow: "auto",
+            padding: 16,
+          },
+        }}
+      >
+        <FileContentRenderer
+          filename={filename}
+          content={content}
+          maxHeight={undefined}
+        />
+      </Modal>
+    </div>
+  );
 }
 
 // 流式执行内容
@@ -660,97 +884,50 @@ function formatSubagentResult(toolName: string, result: string, args?: Record<st
         <div>
           {code && (
             <div style={{ marginBottom: 8 }}>
-              <Text type="secondary" style={{ fontSize: 11, display: "block", marginBottom: 4 }}>
-                执行代码:
-              </Text>
-              <pre
-                style={{
-                  margin: 0,
-                  padding: 8,
-                  background: "#1a1a2e",
-                  color: "#a6e22e",
-                  borderRadius: 4,
-                  fontSize: 11,
-                  fontFamily: "monospace",
-                  overflow: "auto",
-                  maxHeight: 150,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-all",
-                }}
-              >
-                {code}
-              </pre>
+              <ExpandablePreview
+                content={code}
+                label="执行代码:"
+                maxHeight={150}
+                darkTheme
+                modalTitle="Python 代码"
+              />
             </div>
           )}
-          <Text type="secondary" style={{ fontSize: 11, display: "block", marginBottom: 4 }}>
-            执行结果:
-          </Text>
-          <pre
-            style={{
-              margin: 0,
-              padding: 8,
-              background: "#f5f5f5",
-              borderRadius: 4,
-              fontSize: 11,
-              fontFamily: "monospace",
-              overflow: "auto",
-              maxHeight: 200,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-all",
-            }}
-          >
-            {result || "执行完成，无输出"}
-          </pre>
+          <ExpandablePreview
+            content={result || "执行完成，无输出"}
+            label="执行结果:"
+            maxHeight={200}
+            modalTitle="执行结果"
+          />
         </div>
       );
     }
 
     case "ls": {
-      // 文件列表 - 显示路径和内容
+      // 文件列表 - 显示路径和内容，支持放大查看
       const path = args?.path ? String(args.path) : "";
       return (
         <div>
-          {path && (
-            <Text type="secondary" style={{ fontSize: 11, display: "block", marginBottom: 4 }}>
-              📁 {path}
-            </Text>
-          )}
-          <pre style={{
-            margin: 0,
-            fontSize: 11,
-            fontFamily: "monospace",
-            background: "#f5f5f5",
-            padding: 8,
-            borderRadius: 4,
-            maxHeight: 100,
-            overflow: "auto",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all"
-          }}>
-            {result.length > 300 ? result.slice(0, 300) + "\n..." : result}
-          </pre>
+          <ExpandablePreview
+            content={result}
+            label={path ? `📁 ${path}` : "文件列表:"}
+            maxHeight={100}
+            modalTitle={`文件列表 - ${path || "/"}`}
+          />
         </div>
       );
     }
 
     case "read_file": {
-      // 读取文件 - 根据文件类型渲染内容
+      // 读取文件 - 根据文件类型渲染内容，支持放大查看
       const filePath = args?.path ? String(args.path) : (args?.file_path ? String(args.file_path) : "");
       const filename = filePath.split("/").pop() || "file.txt";
       return (
-        <div>
-          {filePath && (
-            <Tag color="blue" style={{ marginBottom: 6 }}>
-              📄 {filePath}
-            </Tag>
-          )}
-          <FileContentRenderer
-            filename={filename}
-            content={result}
-            compact
-            maxHeight={150}
-          />
-        </div>
+        <ExpandableFileContent
+          filePath={filePath}
+          filename={filename}
+          content={result}
+        />
       );
     }
 
@@ -863,11 +1040,13 @@ function StepResultDisplay({ toolName, result }: { toolName: string; result: str
       );
     }
     case "task":
-      // 子代理任务结果 - 使用 markdown 渲染
+      // 子代理任务结果 - 使用 markdown 渲染，支持放大查看
       return (
-        <div style={{ background: "#fafafa", padding: 12, borderRadius: 4, maxHeight: 400, overflow: "auto" }}>
-          <SimpleMarkdown text={truncated} />
-        </div>
+        <ExpandableMarkdown
+          content={truncated}
+          maxHeight={400}
+          modalTitle="子代理执行结果"
+        />
       );
     default:
       return (
@@ -962,12 +1141,14 @@ function ToolResultDisplay({ toolResult }: { toolResult: { toolName: string; arg
         </div>
       );
     case "task":
-      // 子代理任务 - 使用 markdown 渲染结果
+      // 子代理任务 - 使用 markdown 渲染结果，支持放大查看
       return (
         <Card title="子代理执行结果" size="small">
-          <div style={{ background: "#fafafa", padding: 16, borderRadius: 4, maxHeight: 500, overflow: "auto" }}>
-            <SimpleMarkdown text={result} />
-          </div>
+          <ExpandableMarkdown
+            content={result}
+            maxHeight={500}
+            modalTitle="子代理执行结果"
+          />
         </Card>
       );
     default:

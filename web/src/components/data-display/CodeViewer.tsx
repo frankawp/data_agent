@@ -1,14 +1,28 @@
 "use client";
 
-import { Tag } from "antd";
+import { useState } from "react";
+import { Tag, Button, Tooltip, Modal } from "antd";
+import { ExpandAltOutlined } from "@ant-design/icons";
 
 interface CodeViewerProps {
   code: string;
   language?: "sql" | "python" | "json";
   maxHeight?: number;
+  /** 是否显示放大按钮 */
+  expandable?: boolean;
+  /** Modal 标题 */
+  title?: string;
 }
 
-export function CodeViewer({ code, language = "sql", maxHeight }: CodeViewerProps) {
+export function CodeViewer({
+  code,
+  language = "sql",
+  maxHeight,
+  expandable = true,
+  title,
+}: CodeViewerProps) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   // 简单的语法高亮（可以后续替换为 Monaco Editor）
   const highlightedCode = highlightSyntax(code, language);
 
@@ -17,6 +31,14 @@ export function CodeViewer({ code, language = "sql", maxHeight }: CodeViewerProp
     python: "green",
     json: "orange",
   };
+
+  const langNames: Record<string, string> = {
+    sql: "SQL",
+    python: "Python",
+    json: "JSON",
+  };
+
+  const modalTitle = title || `${langNames[language] || language.toUpperCase()} 代码`;
 
   return (
     <div
@@ -28,8 +50,21 @@ export function CodeViewer({ code, language = "sql", maxHeight }: CodeViewerProp
         overflow: "hidden",
       }}
     >
-      <div style={{ position: "absolute", right: 8, top: 8 }}>
-        <Tag color={langColors[language] || "default"} style={{ textTransform: "uppercase" }}>
+      <div style={{ position: "absolute", right: 8, top: 8, display: "flex", gap: 4, alignItems: "center" }}>
+        {expandable && (
+          <Tooltip title="放大查看">
+            <Button
+              type="text"
+              size="small"
+              icon={<ExpandAltOutlined />}
+              onClick={() => setIsModalOpen(true)}
+              style={{ opacity: 0.6 }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
+            />
+          </Tooltip>
+        )}
+        <Tag color={langColors[language] || "default"} style={{ textTransform: "uppercase", marginRight: 0 }}>
           {language}
         </Tag>
       </div>
@@ -46,6 +81,40 @@ export function CodeViewer({ code, language = "sql", maxHeight }: CodeViewerProp
       >
         <code dangerouslySetInnerHTML={{ __html: highlightedCode }} />
       </pre>
+
+      {/* 放大查看 Modal */}
+      <Modal
+        title={modalTitle}
+        open={isModalOpen}
+        onCancel={() => setIsModalOpen(false)}
+        footer={null}
+        width="90vw"
+        style={{ top: 20 }}
+        styles={{
+          body: {
+            maxHeight: "80vh",
+            overflow: "auto",
+            padding: 0,
+          },
+        }}
+      >
+        <pre
+          style={{
+            margin: 0,
+            padding: 20,
+            fontSize: 14,
+            lineHeight: 1.6,
+            background: "#1e1e1e",
+            color: "#d4d4d4",
+            borderRadius: 4,
+            overflow: "auto",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          <code dangerouslySetInnerHTML={{ __html: highlightedCode }} />
+        </pre>
+      </Modal>
     </div>
   );
 }
