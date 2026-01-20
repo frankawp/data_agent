@@ -201,6 +201,7 @@ class DataAgentSandbox:
                 "hasattr": hasattr,
                 "getattr": getattr,
                 "setattr": setattr,
+                "open": open,  # 文件操作
                 "Exception": Exception,
                 "ValueError": ValueError,
                 "TypeError": TypeError,
@@ -209,6 +210,8 @@ class DataAgentSandbox:
                 "AttributeError": AttributeError,
                 "RuntimeError": RuntimeError,
                 "StopIteration": StopIteration,
+                "FileNotFoundError": FileNotFoundError,
+                "IOError": IOError,
             },
             "__name__": "__main__",
         }

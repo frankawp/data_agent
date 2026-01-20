@@ -654,12 +654,55 @@ function formatSubagentResult(toolName: string, result: string, args?: Record<st
     }
 
     case "execute_python_safe": {
-      // Python 执行 - 简化显示
-      const lines = result.split("\n").filter(Boolean);
-      if (lines.length > 0) {
-        return <Text type="secondary">{lines[0].slice(0, 80)}{lines[0].length > 80 || lines.length > 1 ? "..." : ""}</Text>;
-      }
-      return <Text type="secondary">执行完成</Text>;
+      // Python 执行 - 显示代码和完整输出
+      const code = args?.code ? String(args.code) : "";
+      return (
+        <div>
+          {code && (
+            <div style={{ marginBottom: 8 }}>
+              <Text type="secondary" style={{ fontSize: 11, display: "block", marginBottom: 4 }}>
+                执行代码:
+              </Text>
+              <pre
+                style={{
+                  margin: 0,
+                  padding: 8,
+                  background: "#1a1a2e",
+                  color: "#a6e22e",
+                  borderRadius: 4,
+                  fontSize: 11,
+                  fontFamily: "monospace",
+                  overflow: "auto",
+                  maxHeight: 150,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                }}
+              >
+                {code}
+              </pre>
+            </div>
+          )}
+          <Text type="secondary" style={{ fontSize: 11, display: "block", marginBottom: 4 }}>
+            执行结果:
+          </Text>
+          <pre
+            style={{
+              margin: 0,
+              padding: 8,
+              background: "#f5f5f5",
+              borderRadius: 4,
+              fontSize: 11,
+              fontFamily: "monospace",
+              overflow: "auto",
+              maxHeight: 200,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-all",
+            }}
+          >
+            {result || "执行完成，无输出"}
+          </pre>
+        </div>
+      );
     }
 
     case "ls": {

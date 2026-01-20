@@ -18,6 +18,7 @@ import {
   Card,
   Image,
   Alert,
+  Tooltip,
 } from "antd";
 import {
   ReloadOutlined,
@@ -267,9 +268,11 @@ export function ExportsPanel() {
                     <span style={{ fontSize: 20 }}>{getFileIcon(file.name)}</span>
                   }
                   title={
-                    <Text ellipsis style={{ maxWidth: 180 }}>
-                      {file.name}
-                    </Text>
+                    <Tooltip title={file.name} placement="topLeft">
+                      <Text ellipsis style={{ maxWidth: 280 }}>
+                        {file.name}
+                      </Text>
+                    </Tooltip>
                   }
                   description={
                     <Space size={4}>
@@ -296,9 +299,11 @@ export function ExportsPanel() {
         <Card
           size="small"
           title={
-            <Text ellipsis style={{ maxWidth: 200 }}>
-              预览: {selectedFile.name}
-            </Text>
+            <Tooltip title={selectedFile.name} placement="topLeft">
+              <Text ellipsis style={{ maxWidth: 280 }}>
+                预览: {selectedFile.name}
+              </Text>
+            </Tooltip>
           }
           extra={
             <Button
